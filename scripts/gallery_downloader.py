@@ -84,13 +84,16 @@ class DownloadItem:
     full_url: str
 
 
-def discover_images(page_url: str, selector: str, session: requests.Session) -> List[DownloadItem]:
+def discover_images(
+    page_url: str, selector: str, session: requests.Session, filename_filter: Optional[str] = None
+) -> List[DownloadItem]:
     """Discover images from a gallery page.
 
     Args:
         page_url: URL of the gallery page
         selector: CSS selector to find image elements
         session: Requests session
+        filename_filter: Optional filename pattern to filter (e.g., 'b*.jpg' or 'b__*.jpg')
 
     Returns:
         List of DownloadItem objects
@@ -107,6 +110,14 @@ def discover_images(page_url: str, selector: str, session: requests.Session) -> 
     soup = BeautifulSoup(r.text, "html.parser")
     elements = soup.select(selector)
 
+    # Compile filter pattern if provided
+    filter_pattern = None
+    if filename_filter:
+        # Convert shell-style pattern to regex
+        # b*.jpg -> b.*\.jpg
+        regex_pattern = filename_filter.replace(".", r"\.").replace("*", ".*").replace("?", ".")
+        filter_pattern = re.compile(regex_pattern, re.IGNORECASE)
+
     items: List[DownloadItem] = []
     for el in elements:
         src = el.get("src") or el.get("data-src") or el.get("data-original")
@@ -114,6 +125,13 @@ def discover_images(page_url: str, selector: str, session: requests.Session) -> 
             continue
         abs_thumb = urljoin(page_url, src)
         full = thumb_to_full(abs_thumb)
+
+        # Apply filename filter if provided
+        if filter_pattern:
+            filename = urlsplit(full).path.rsplit("/", 1)[-1]
+            if not filter_pattern.search(filename):
+                continue
+
         items.append(DownloadItem(thumb_url=abs_thumb, full_url=full))
 
     seen = set()
@@ -240,16 +258,48 @@ def main():
     ap.add_argument("--url", required=True, help="Page URL to scrape")
     ap.add_argument("--out", required=True, type=Path, help="Output folder")
     ap.add_argument(
-        "--selector", default=".galleria-thumbnails img", help="CSS selector to find thumbnails"
+        "--selector",
+        default="img",
+        help="CSS selector to find image elements (default: 'img' for all images)",
     )
     ap.add_argument("--concurrency", type=int, default=8, help="Parallel downloads")
+    ap.add_argument(
+        "--debug",
+        action="store_true",
+        help="Debug mode: show found images and HTML structure hints",
+    )
+    ap.add_argument(
+        "--filter",
+        type=str,
+        default=None,
+        help="Filter images by filename pattern (e.g., 'b*.jpg' or 'b__*.jpg')",
+    )
 
     args = ap.parse_args()
 
     session = make_session()
-    items = discover_images(args.url, args.selector, session)
+    items = discover_images(args.url, args.selector, session, filename_filter=args.filter)
     if not items:
         print("No images discovered with the given selector.")
+        if args.debug:
+            # Try to help user find the right selector
+            try:
+                r = session.get(args.url, timeout=20)
+                r.raise_for_status()
+                soup = BeautifulSoup(r.text, "html.parser")
+                all_imgs = soup.find_all("img")
+                print(f"\nDebug: Found {len(all_imgs)} total <img> tags on the page.")
+                if all_imgs:
+                    print("\nFirst few image sources found:")
+                    for i, img in enumerate(all_imgs[:5]):
+                        src = img.get("src") or img.get("data-src") or img.get("data-original")
+                        print(f"  {i+1}. {src}")
+                    print("\nTry using a different selector, for example:")
+                    print("  --selector 'img'  (all images)")
+                    print("  --selector '.some-class img'  (images in a specific class)")
+                    print("  --selector '#some-id img'  (images in a specific ID)")
+            except Exception as e:
+                print(f"Debug: Could not analyze page: {e}")
         sys.exit(2)
 
     print(f"Discovered {len(items)} images.")
