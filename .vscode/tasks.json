@@ -1,0 +1,56 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Setup Virtual Environment",
+            "type": "shell",
+            "command": "${workspaceFolder}/setup_venv.ps1",
+            "windows": {
+                "command": "powershell",
+                "args": ["-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/setup_venv.ps1"]
+            },
+            "linux": {
+                "command": "bash",
+                "args": ["${workspaceFolder}/setup_venv.sh"]
+            },
+            "osx": {
+                "command": "bash",
+                "args": ["${workspaceFolder}/setup_venv.sh"]
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Install Dependencies",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/Scripts/pip.exe",
+            "windows": {
+                "command": "${workspaceFolder}/.venv/Scripts/pip.exe"
+            },
+            "linux": {
+                "command": "${workspaceFolder}/.venv/bin/pip"
+            },
+            "osx": {
+                "command": "${workspaceFolder}/.venv/bin/pip"
+            },
+            "args": ["install", "-r", "requirements.txt"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Tests",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "windows": {
+                "command": "${workspaceFolder}/.venv/Scripts/python.exe"
+            },
+            "linux": {
+                "command": "${workspaceFolder}/.venv/bin/python"
+            },
+            "osx": {
+                "command": "${workspaceFolder}/.venv/bin/python"
+            },
+            "args": ["-m", "pytest", "tests/", "-v"],
+            "problemMatcher": []
+        }
+    ]
+}
+

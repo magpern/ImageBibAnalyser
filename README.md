@@ -44,6 +44,8 @@ docker run --rm -v $(pwd)/data:/data \
   query --bib 1234 --db /data/bibdb.json
 ```
 
+**Note:** The Docker image uses `python:3.11-slim` as the base image and `opencv-python-headless` to minimize image size. This avoids GUI/X11/OpenGL dependencies.
+
 ## Local Development
 
 ### Prerequisites

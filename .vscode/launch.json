@@ -1,0 +1,68 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Download Images",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/gallery_downloader.py",
+            "args": [
+                "--url", "https://example.com/gallery",
+                "--out", "./photos",
+                "--selector", ".galleria-thumbnails img",
+                "--concurrency", "8"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/scripts"
+            }
+        },
+        {
+            "name": "Python: Extract Bibs (OCR)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/bib_finder.py",
+            "args": [
+                "--input", "./photos",
+                "--output", "./results/results.csv",
+                "--db", "./results/bibdb.json",
+                "--image-url", "https://example.com/gallery/",
+                "--annotate-dir", "./results/annotated"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/scripts"
+            }
+        },
+        {
+            "name": "Python: Query Bibs",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/bib_query.py",
+            "args": [
+                "--bib", "1234",
+                "--db", "./results/bibdb.json",
+                "--format", "json"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/scripts"
+            }
+        },
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/scripts"
+            }
+        }
+    ]
+}
+

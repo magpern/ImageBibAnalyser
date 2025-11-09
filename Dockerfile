@@ -1,18 +1,11 @@
 # Race Bib Analyzer Docker Image
-# Base image with Tesseract OCR and Python
-FROM ubuntu:22.04
+# Lightweight base image with Python
+FROM python:3.11-slim
 
-# Avoid interactive prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install system dependencies
+# Install system dependencies (Tesseract OCR only)
 RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3-pip \
     tesseract-ocr \
     tesseract-ocr-eng \
-    libopencv-dev \
-    python3-opencv \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -22,7 +15,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy scripts
 COPY scripts/ ./scripts/
@@ -35,7 +28,7 @@ ENV PYTHONPATH=/app/scripts:$PYTHONPATH
 
 # Create wrapper script for racebib command
 RUN echo '#!/bin/bash' > /usr/local/bin/racebib && \
-    echo 'cd /app && python3 -m scripts.cli "$@"' >> /usr/local/bin/racebib && \
+    echo 'cd /app && python -m scripts.cli "$@"' >> /usr/local/bin/racebib && \
     chmod +x /usr/local/bin/racebib
 
 # Default command (can be overridden)

@@ -35,7 +35,8 @@ venv.bak/
 .idea/
 
 # VS Code
-.vscode/
+# Keep .vscode/ for shared settings (uncomment line below to ignore)
+# .vscode/
 *.code-workspace
 
 # Jupyter Notebook

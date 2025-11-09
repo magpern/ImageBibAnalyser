@@ -6,6 +6,8 @@
 
 All commands run inside the Docker container. Use Docker volumes to mount your data directories.
 
+**Note:** The Docker image uses `python:3.11-slim` as the base image and `opencv-python-headless` for a lightweight build without GUI dependencies.
+
 #### Download Images from Gallery
 
 ```bash
