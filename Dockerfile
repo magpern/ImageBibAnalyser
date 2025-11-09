@@ -24,7 +24,7 @@ COPY scripts/ ./scripts/
 RUN chmod +x scripts/*.py
 
 # Set Python path to include scripts directory
-ENV PYTHONPATH=/app/scripts:$PYTHONPATH
+ENV PYTHONPATH=/app/scripts
 
 # Create wrapper script for racebib command
 RUN echo '#!/bin/bash' > /usr/local/bin/racebib && \
