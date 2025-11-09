@@ -43,6 +43,12 @@ from tqdm import tqdm
 
 
 def thumb_to_full(url: str) -> str:
+    """Convert thumbnail URL to full image URL.
+
+    Converts:
+    - t__*.jpg -> b__*.jpg (double underscore)
+    - t_*.jpg -> b_*.jpg (single underscore, for sites like hasselbyloppet.se)
+    """
     parts = urlsplit(url)
     if not parts.path:
         return url
@@ -50,7 +56,10 @@ def thumb_to_full(url: str) -> str:
         dirpath, filename = parts.path.rsplit("/", 1)
     else:
         dirpath, filename = "", parts.path
+    # Try double underscore first, then single underscore
     new_filename = re.sub(r"^t__", "b__", filename)
+    if new_filename == filename:  # No change, try single underscore
+        new_filename = re.sub(r"^t_", "b_", filename)
     new_path = f"{dirpath}/{new_filename}" if dirpath else new_filename
     return urlunsplit((parts.scheme, parts.netloc, new_path, parts.query, parts.fragment))
 
@@ -241,6 +250,7 @@ def download_all(items: List[DownloadItem], out_dir: Path, concurrency: int = 8)
     with ThreadPoolExecutor(max_workers=max(1, concurrency)) as ex:
         futures = []
         for it in items:
+            # Use full_url for download (already converted and filtered)
             target = choose_target_path(out_dir, it.full_url)
             futures.append(ex.submit(download_one, session, it.full_url, target))
 

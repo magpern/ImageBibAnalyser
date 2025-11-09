@@ -102,6 +102,8 @@ report.html
 # Logs
 *.log
 logs/
+*.jpg
+*.png
 
 # Environment variables
 .env
