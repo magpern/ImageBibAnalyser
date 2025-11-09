@@ -239,6 +239,81 @@ racebib ocr --input ./photos --output results.csv --min-text-size 0.02 --min-con
 4. **Try different PSM modes**: `--psm 8 13` (good for single numbers/words)
 5. **Add more rotations**: `--rotations 0 45 90 -45 -90 180` if bibs are tilted
 
+**Train OCR with known examples (recommended for best results):**
+If you have some images where you know the correct bib numbers, you can "teach" the system what works best:
+
+1. **Create a ground truth file** (JSON or CSV format):
+   
+   **JSON format** (`ground_truth.json`):
+   ```json
+   {
+     "image1.jpg": ["254", "506", "133", "411"],
+     "image2.jpg": ["1234"],
+     "image3.jpg": []
+   }
+   ```
+   
+   **CSV format** (`ground_truth.csv`):
+   ```csv
+   image,bibs
+   image1.jpg,"254;506;133;411"
+   image2.jpg,"1234"
+   image3.jpg,""
+   ```
+
+2. **Run training** to find optimal parameters:
+   
+   **Using Docker:**
+   ```bash
+   docker run --rm -v ${PWD}/data:/data \
+     bibanalyser:latest \
+     train --input /data/photos --ground-truth /data/ground_truth.json --output /data/best_params.json
+   ```
+   
+   **Using Local Python:**
+   ```bash
+   racebib train --input ./photos --ground-truth ground_truth.json --output best_params.json
+   ```
+   
+   **With GPU acceleration (if you have NVIDIA GPU):**
+   ```bash
+   racebib train --input ./photos --ground-truth ground_truth.json --output best_params.json --use-gpu
+   ```
+   
+   **Note on GPU acceleration:**
+   - GPU can speed up image preprocessing by 2-5x
+   - However, Tesseract OCR is CPU-only, so OCR remains the bottleneck
+   - Overall speedup is typically 20-40% depending on your system
+   - Requires OpenCV with CUDA support or CuPy installed
+   
+   This will test hundreds of parameter combinations and find the best settings for your images.
+
+3. **Use the best parameters** from training:
+   
+   **Using Docker:**
+   ```bash
+   docker run --rm -v ${PWD}/data:/data \
+     bibanalyser:latest \
+     ocr --input /data/photos --output /data/results.csv \
+     --min-conf <best_value> \
+     --psm <best_modes> \
+     --rotations <best_angles> \
+     --min-text-size <best_value> \
+     --max-text-size <best_value>
+   ```
+   
+   **Using Local Python:**
+   ```bash
+   racebib ocr --input ./photos --output results.csv \
+     --min-conf <best_value> \
+     --psm <best_modes> \
+     --rotations <best_angles> \
+     --min-text-size <best_value> \
+     --max-text-size <best_value>
+   ```
+
+   The training output will show you the exact command to use!
+
 **Step 3: Query for specific bib numbers**
 ```bash
 racebib query --bib 1234 --db bibdb.json
@@ -265,6 +340,9 @@ docker run --rm -v ${PWD}/data:/data bibanalyser:latest download --url <gallery-
 # Extract bibs
 docker run --rm -v ${PWD}/data:/data bibanalyser:latest ocr --input /data/photos --output /data/results.csv --db /data/bibdb.json --image-url <gallery-base-url>/
 
+# Train OCR parameters (optional, but recommended)
+docker run --rm -v ${PWD}/data:/data bibanalyser:latest train --input /data/photos --ground-truth /data/ground_truth.json --output /data/best_params.json
+
 # Query bibs
 docker run --rm -v ${PWD}/data:/data bibanalyser:latest query --bib 1234 --db /data/bibdb.json
 ```
@@ -283,6 +361,9 @@ racebib ocr --input ./photos --output results.csv \
 
 # Query bibs
 racebib query --bib 1234 --db bibdb.json
+
+# Train OCR parameters (optional, but recommended)
+racebib train --input ./photos --ground-truth ground_truth.json --output best_params.json
 
 # Generate report
 python scripts/generate_report.py --db bibdb.json --output report.html

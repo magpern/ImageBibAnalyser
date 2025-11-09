@@ -17,6 +17,7 @@ def main():
         print("  download  Download images from a gallery page")
         print("  ocr       Extract bib numbers from images using OCR")
         print("  query     Query database for image URLs containing specific bib numbers")
+        print("  train     Train/validate OCR parameters using images with known bib numbers")
         print("\nUse 'racebib <command> --help' for command-specific help")
         sys.exit(1)
 
@@ -35,9 +36,13 @@ def main():
         from bib_query import main as query_main
 
         query_main()
+    elif command == "train":
+        from bib_train import main as train_main
+
+        train_main()
     else:
         print(f"Unknown command: {command}")
-        print("Available commands: download, ocr, query")
+        print("Available commands: download, ocr, query, train")
         sys.exit(1)
 
 

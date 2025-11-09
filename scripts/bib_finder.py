@@ -55,7 +55,23 @@ def build_bib_regex(min_digits: int, max_digits: int) -> re.Pattern:
     return re.compile(pattern)
 
 
-def preprocess(img: np.ndarray) -> np.ndarray:
+def preprocess(img: np.ndarray, use_gpu: bool = False) -> np.ndarray:
+    """
+    Preprocess image for OCR. Optionally uses GPU acceleration if available.
+
+    Note: GPU acceleration requires OpenCV built with CUDA support or CuPy.
+    Tesseract OCR itself is CPU-only, so GPU mainly speeds up preprocessing.
+    """
+    if use_gpu:
+        try:
+            from bib_finder_gpu import preprocess_gpu, is_gpu_available
+
+            if is_gpu_available():
+                return preprocess_gpu(img, use_cuda=True)
+        except (ImportError, AttributeError):
+            pass  # Fallback to CPU
+
+    # CPU-based preprocessing (default)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
     eq = clahe.apply(gray)
@@ -119,6 +135,7 @@ def detect_bibs_for_image(
     focus_region: bool = True,
     min_text_size: float = 0.01,
     max_text_size: float = 0.3,
+    use_gpu: bool = False,
 ) -> Tuple[Path, List[str], List[float]]:
     img = cv2.imread(str(path))
     if img is None:
@@ -148,7 +165,7 @@ def detect_bibs_for_image(
         else:
             work_img = rotated
 
-        proc = preprocess(work_img)
+        proc = preprocess(work_img, use_gpu=use_gpu)
         for psm in psm_values:
             df = run_tesseract(proc, psm=psm)
             for _, row in df.iterrows():
@@ -294,6 +311,7 @@ def process_all(
     focus_region: bool = True,
     min_text_size: float = 0.01,
     max_text_size: float = 0.3,
+    use_gpu: bool = False,
 ) -> List[Tuple[Path, List[str], List[float]]]:
     results: List[Tuple[Path, List[str], List[float]]] = []
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
@@ -309,6 +327,7 @@ def process_all(
                 focus_region,
                 min_text_size,
                 max_text_size,
+                use_gpu,
             ): p
             for p in inputs
         }
@@ -444,6 +463,23 @@ def main():
         storage = BibStorage(args.db)
         print(f"Using storage database: {args.db}")
 
+    # Check GPU availability if requested
+    if args.use_gpu:
+        try:
+            from bib_finder_gpu import is_gpu_available, get_gpu_info
+
+            if is_gpu_available():
+                gpu_info = get_gpu_info()
+                print(f"GPU acceleration enabled: {gpu_info}")
+            else:
+                print("Warning: --use-gpu specified but GPU not available. Falling back to CPU.")
+                args.use_gpu = False
+        except ImportError:
+            print(
+                "Warning: GPU support not available. Install opencv-contrib-python or cupy for GPU acceleration."
+            )
+            args.use_gpu = False
+
     results = process_all(
         inputs=paths,
         bib_regex=bib_regex,
@@ -455,6 +491,7 @@ def main():
         focus_region=not args.no_focus_region,
         min_text_size=args.min_text_size,
         max_text_size=args.max_text_size,
+        use_gpu=args.use_gpu,
     )
 
     rows = []
