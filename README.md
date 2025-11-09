@@ -56,6 +56,18 @@ docker run --rm -v $(pwd)/data:/data \
 
 ### Setup
 
+**Quick setup (automated):**
+
+```bash
+# Linux/macOS
+./setup_venv.sh
+
+# Windows PowerShell
+.\setup_venv.ps1
+```
+
+**Manual setup:**
+
 ```bash
 # Create virtual environment
 python -m venv .venv
