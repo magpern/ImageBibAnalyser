@@ -155,12 +155,21 @@ racebib ocr --input ./photos --output results.csv \
   - Decrease if running out of memory
 
 **Advanced OCR Settings:**
-- `--psm <modes>` - Tesseract PSM (Page Segmentation Mode) to try (default: `6 7 11`)
+- `--psm <modes>` - Tesseract PSM (Page Segmentation Mode) to try (default: `6 7 8 11 13`)
   - Multiple modes are tried and best result is used
-  - Common modes: 6 (uniform block), 7 (single line), 11 (sparse text)
+  - Common modes: 6 (uniform block), 7 (single line), 8 (single word), 11 (sparse text), 13 (raw line)
 - `--rotations <angles>` - Image rotation angles to try (default: `0 90 -90 180`)
   - Helps detect bibs in rotated images
   - Format: `--rotations 0 90 180` (degrees)
+- `--no-focus-region` - Disable region focusing (process entire image)
+  - By default, focuses on center-upper 60% of image where bibs typically are
+  - Use this flag if bibs might be in other locations
+- `--min-text-size <ratio>` - Minimum text size ratio to consider (default: 0.01 = 1%)
+  - Filters out tiny false positives from logos/text
+  - Lower values = more detections but more false positives
+- `--max-text-size <ratio>` - Maximum text size ratio to consider (default: 0.3 = 30%)
+  - Filters out oversized detections
+  - Higher values = more detections but more false positives
 
 **Debugging & Output:**
 - `--annotate-dir <folder>` - Save annotated images with detected bibs highlighted
@@ -213,8 +222,15 @@ racebib ocr --input ./photos --output results.csv --aggressive
 ```
 - Lowers confidence threshold to 40
 - Tries more PSM modes (6, 7, 8, 11, 13)
-- Tries more rotation angles
+- Tries more rotation angles (0, 45, 90, -45, -90, 135, -135, 180)
 - Use if you're missing bib numbers
+
+**Filter out false positives (if getting too many wrong detections):**
+```bash
+racebib ocr --input ./photos --output results.csv --min-text-size 0.02 --min-conf 50
+```
+- Increase `--min-text-size` to filter tiny detections (e.g., from logos)
+- Increase `--min-conf` to require higher confidence scores
 
 **Improving detection accuracy:**
 1. **Lower confidence threshold** if missing bibs: `--min-conf 40` or `--min-conf 50`

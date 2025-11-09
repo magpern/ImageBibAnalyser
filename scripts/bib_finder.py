@@ -66,6 +66,26 @@ def preprocess(img: np.ndarray) -> np.ndarray:
     return thr
 
 
+def extract_bib_region(img: np.ndarray, region_ratio: float = 0.6) -> np.ndarray:
+    """Extract center-upper region where bibs are typically located.
+
+    Args:
+        img: Input image
+        region_ratio: Ratio of image to keep (0.6 = keep 60% of width/height from center)
+
+    Returns:
+        Cropped image focusing on bib region
+    """
+    h, w = img.shape[:2]
+    # Focus on center-upper region (where bibs typically are)
+    # Keep center 60% of width, and upper 60% of height
+    crop_w = int(w * region_ratio)
+    crop_h = int(h * region_ratio)
+    start_x = (w - crop_w) // 2
+    start_y = 0  # Start from top
+    return img[start_y : start_y + crop_h, start_x : start_x + crop_w]
+
+
 def run_tesseract(img: np.ndarray, psm: int = 6) -> pd.DataFrame:
     config = f"--psm {psm} -l eng --oem 3"
     data = pytesseract.image_to_data(img, config=config, output_type=pytesseract.Output.DATAFRAME)
@@ -96,53 +116,139 @@ def detect_bibs_for_image(
     rotations: Tuple[int, ...] = (0, 90, -90, 180),
     psm_values: Tuple[int, ...] = (6, 7, 11),
     annotate_dir: Path | None = None,
+    focus_region: bool = True,
+    min_text_size: float = 0.01,
+    max_text_size: float = 0.3,
 ) -> Tuple[Path, List[str], List[float]]:
     img = cv2.imread(str(path))
     if img is None:
         return path, [], []
 
-    all_hits: Dict[str, float] = {}
+    all_hits: Dict[str, Tuple[float, float]] = {}  # bib -> (confidence, size_ratio)
     best_ann_img = None
     best_hits_for_ann: Set[str] = set()
+    img_h, img_w = img.shape[:2]
+    img_area = img_h * img_w
 
     for angle in rotations:
         rotated = rotate_image(img, angle)
-        proc = preprocess(rotated)
+
+        # Optionally focus on bib region (center-upper portion)
+        crop_offset_x = 0
+        crop_offset_y = 0
+        if focus_region:
+            h_rot, w_rot = rotated.shape[:2]
+            crop_w = int(w_rot * 0.6)
+            crop_h = int(h_rot * 0.6)
+            crop_offset_x = (w_rot - crop_w) // 2
+            crop_offset_y = 0
+            work_img = rotated[
+                crop_offset_y : crop_offset_y + crop_h, crop_offset_x : crop_offset_x + crop_w
+            ]
+        else:
+            work_img = rotated
+
+        proc = preprocess(work_img)
         for psm in psm_values:
             df = run_tesseract(proc, psm=psm)
             for _, row in df.iterrows():
-                text = row["text"]
+                text = str(row["text"]).strip()
                 conf = float(row["conf"]) if not np.isnan(row["conf"]) else 0.0
                 if conf < min_confidence:
                     continue
-                for m in bib_regex.finditer(text):
-                    bib = m.group(0)
-                    if bib not in all_hits or conf > all_hits[bib]:
-                        all_hits[bib] = conf
+
+                # Check if text matches bib pattern exactly (preferred) or contains it
+                bib_match = None
+                if bib_regex.fullmatch(text):
+                    # Exact match - highest priority
+                    bib_match = text
+                else:
+                    # Check if text contains a bib number
+                    matches = list(bib_regex.finditer(text))
+                    if matches:
+                        # Prefer longer matches (more digits)
+                        bib_match = max(matches, key=lambda m: len(m.group(0))).group(0)
+
+                if bib_match:
+                    # Calculate size ratio of detected text
+                    w = float(row["width"])
+                    h = float(row["height"])
+                    text_area = w * h
+                    size_ratio = text_area / img_area if img_area > 0 else 0
+
+                    # Filter by size - bibs should be reasonably sized
+                    if size_ratio < min_text_size or size_ratio > max_text_size:
+                        continue
+
+                    # Store with confidence and size (prefer higher confidence, then larger size)
+                    if bib_match not in all_hits:
+                        all_hits[bib_match] = (conf, size_ratio)
+                    else:
+                        old_conf, old_size = all_hits[bib_match]
+                        # Update if new detection has higher confidence, or same confidence but larger size
+                        if conf > old_conf or (conf == old_conf and size_ratio > old_size):
+                            all_hits[bib_match] = (conf, size_ratio)
 
             if annotate_dir is not None and not df.empty:
                 hits_in_frame: Set[str] = set()
                 for _, row in df.iterrows():
-                    text = str(row["text"])
+                    text = str(row["text"]).strip()
                     conf = float(row["conf"]) if not np.isnan(row["conf"]) else 0.0
                     if conf < min_confidence:
                         continue
-                    if bib_regex.fullmatch(text) or any(bib_regex.finditer(text)):
+
+                    # Check size filter
+                    w = float(row["width"])
+                    h = float(row["height"])
+                    text_area = w * h
+                    size_ratio = text_area / img_area if img_area > 0 else 0
+                    if size_ratio < min_text_size or size_ratio > max_text_size:
+                        continue
+
+                    if bib_regex.fullmatch(text):
                         hits_in_frame.add(text)
+                    else:
+                        matches = list(bib_regex.finditer(text))
+                        if matches:
+                            hits_in_frame.add(max(matches, key=lambda m: len(m.group(0))).group(0))
+
                 if len(hits_in_frame) > len(best_hits_for_ann):
                     vis = rotated.copy()
+                    # Draw region focus if enabled
+                    if focus_region:
+                        h_vis, w_vis = rotated.shape[:2]
+                        crop_w = int(w_vis * 0.6)
+                        crop_h = int(h_vis * 0.6)
+                        start_x = (w_vis - crop_w) // 2
+                        cv2.rectangle(vis, (start_x, 0), (start_x + crop_w, crop_h), (255, 0, 0), 2)
+
                     for _, row in df.iterrows():
-                        x, y, w, h = (
-                            int(row["left"]),
-                            int(row["top"]),
-                            int(row["width"]),
-                            int(row["height"]),
-                        )
-                        text = str(row["text"])
+                        # Adjust coordinates if we cropped the image
+                        x = int(row["left"]) + crop_offset_x
+                        y = int(row["top"]) + crop_offset_y
+                        w = int(row["width"])
+                        h = int(row["height"])
+                        text = str(row["text"]).strip()
                         conf = float(row["conf"]) if not np.isnan(row["conf"]) else 0.0
                         if conf < min_confidence:
                             continue
-                        if bib_regex.fullmatch(text) or any(bib_regex.finditer(text)):
+
+                        # Check size filter (use original image area)
+                        text_area = w * h
+                        size_ratio = text_area / img_area if img_area > 0 else 0
+                        if size_ratio < min_text_size or size_ratio > max_text_size:
+                            continue
+
+                        is_bib = False
+                        if bib_regex.fullmatch(text):
+                            is_bib = True
+                        else:
+                            matches = list(bib_regex.finditer(text))
+                            if matches:
+                                is_bib = True
+                                text = max(matches, key=lambda m: len(m.group(0))).group(0)
+
+                        if is_bib:
                             cv2.rectangle(vis, (x, y), (x + w, y + h), (0, 255, 0), 2)
                             label = f"{text} ({int(conf)})"
                             cv2.putText(
@@ -157,8 +263,9 @@ def detect_bibs_for_image(
                     best_ann_img = vis
                     best_hits_for_ann = hits_in_frame
 
-    bibs_sorted = sorted(all_hits.keys(), key=lambda k: (-all_hits[k], k))
-    confidences_sorted = [all_hits[bib] for bib in bibs_sorted]
+    # Sort by confidence (descending), then by size (descending)
+    bibs_sorted = sorted(all_hits.keys(), key=lambda k: (-all_hits[k][0], -all_hits[k][1], k))
+    confidences_sorted = [all_hits[bib][0] for bib in bibs_sorted]
 
     if annotate_dir is not None and best_ann_img is not None:
         annotate_dir.mkdir(parents=True, exist_ok=True)
@@ -184,6 +291,9 @@ def process_all(
     rotations: Tuple[int, ...],
     psm_values: Tuple[int, ...],
     annotate_dir: Path | None,
+    focus_region: bool = True,
+    min_text_size: float = 0.01,
+    max_text_size: float = 0.3,
 ) -> List[Tuple[Path, List[str], List[float]]]:
     results: List[Tuple[Path, List[str], List[float]]] = []
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
@@ -196,6 +306,9 @@ def process_all(
                 rotations,
                 psm_values,
                 annotate_dir,
+                focus_region,
+                min_text_size,
+                max_text_size,
             ): p
             for p in inputs
         }
@@ -262,6 +375,23 @@ def main():
         action="store_true",
         help="Aggressive mode: lower confidence threshold, more PSM modes, more rotations",
     )
+    ap.add_argument(
+        "--no-focus-region",
+        action="store_true",
+        help="Disable region focusing (process entire image). By default, focuses on center-upper region where bibs typically are.",
+    )
+    ap.add_argument(
+        "--min-text-size",
+        type=float,
+        default=0.01,
+        help="Minimum text size ratio (relative to image area) to consider as bib. Default 0.01 (1%%). Filters out tiny false positives.",
+    )
+    ap.add_argument(
+        "--max-text-size",
+        type=float,
+        default=0.3,
+        help="Maximum text size ratio (relative to image area) to consider as bib. Default 0.3 (30%%). Filters out oversized detections.",
+    )
 
     args = ap.parse_args()
 
@@ -322,6 +452,9 @@ def main():
         rotations=tuple(args.rotations),
         psm_values=tuple(args.psm),
         annotate_dir=args.annotate_dir,
+        focus_region=not args.no_focus_region,
+        min_text_size=args.min_text_size,
+        max_text_size=args.max_text_size,
     )
 
     rows = []
