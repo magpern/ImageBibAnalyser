@@ -1,0 +1,8 @@
+opencv-python
+pytesseract
+numpy
+pandas
+tqdm
+requests
+beautifulsoup4
+psutil

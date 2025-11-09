@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bibanalyser"
+version = "1.0.0"
+description = "Race bib number detection and querying tool using OCR"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Race Bib Analyzer"}
+]
+keywords = ["ocr", "tesseract", "race", "bib", "image-processing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+dependencies = [
+    "opencv-python",
+    "pytesseract",
+    "numpy",
+    "pandas",
+    "tqdm",
+    "requests",
+    "beautifulsoup4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+]
+
+[project.scripts]
+racebib = "scripts.cli:main"
+
+[project.entry-points."racebib.commands"]
+download = "scripts.gallery_downloader:main"
+ocr = "scripts.bib_finder:main"
+query = "scripts.bib_query:main"
+
+[tool.setuptools]
+packages = ["scripts"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
