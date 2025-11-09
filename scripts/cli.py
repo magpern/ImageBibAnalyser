@@ -5,6 +5,9 @@ Race Bib Analyzer CLI — main entry point for racebib commands.
 import sys
 from pathlib import Path
 
+# Add scripts directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+
 
 def main():
     """Main CLI entry point that routes to subcommands."""
