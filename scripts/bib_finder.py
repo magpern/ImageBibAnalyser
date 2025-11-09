@@ -214,7 +214,12 @@ def main():
     ap.add_argument("--workers", type=int, default=4, help="Parallel workers")
     ap.add_argument("--min-digits", type=int, default=2, help="Minimum bib digits")
     ap.add_argument("--max-digits", type=int, default=6, help="Maximum bib digits")
-    ap.add_argument("--min-conf", type=int, default=60, help="Minimum OCR confidence (0–100)")
+    ap.add_argument(
+        "--min-conf",
+        type=int,
+        default=60,
+        help="Minimum OCR confidence (0–100). Lower values = more detections but more false positives. Try 40-50 if missing bibs.",
+    )
     ap.add_argument(
         "--annotate-dir", type=Path, default=None, help="If set, save annotated previews here"
     )
@@ -222,10 +227,18 @@ def main():
         "--tesseract-cmd", type=str, default=None, help="Path to tesseract binary if not on PATH"
     )
     ap.add_argument(
-        "--psm", nargs="+", type=int, default=[6, 7, 11], help="Tesseract PSM modes to try"
+        "--psm",
+        nargs="+",
+        type=int,
+        default=[6, 7, 8, 11, 13],
+        help="Tesseract PSM modes to try (default: 6,7,8,11,13). More modes = better detection but slower. Try --psm 8 13 for single words/numbers.",
     )
     ap.add_argument(
-        "--rotations", nargs="+", type=int, default=[0, 90, -90, 180], help="Image rotations to try"
+        "--rotations",
+        nargs="+",
+        type=int,
+        default=[0, 90, -90, 180],
+        help="Image rotations to try in degrees (default: 0,90,-90,180). Add more angles if bibs are tilted.",
     )
     ap.add_argument(
         "--bib-pattern",
@@ -244,11 +257,31 @@ def main():
     )
     ap.add_argument("--limit", type=int, default=None, help="Process only first N images")
     ap.add_argument("--sample", type=int, default=None, help="Randomly sample N images to process")
+    ap.add_argument(
+        "--aggressive",
+        action="store_true",
+        help="Aggressive mode: lower confidence threshold, more PSM modes, more rotations",
+    )
 
     args = ap.parse_args()
 
     if args.tesseract_cmd:
         pytesseract.pytesseract.tesseract_cmd = args.tesseract_cmd
+
+    # Apply aggressive mode settings
+    if args.aggressive:
+        # Override defaults for better detection
+        if args.min_conf == 60:  # Default value
+            args.min_conf = 40
+        # Check if using default PSM modes
+        default_psm = {6, 7, 8, 11, 13}
+        if set(args.psm) == default_psm or set(args.psm) == {6, 7, 11}:
+            args.psm = [6, 7, 8, 11, 13]
+        # Check if using default rotations
+        default_rotations = {0, 90, -90, 180}
+        if set(args.rotations) == default_rotations:
+            args.rotations = [0, 45, 90, -45, -90, 135, -135, 180]
+        print("Aggressive mode enabled: lower confidence, more PSM modes, more rotations")
 
     exts = tuple(args.ext)
     paths = gather_images(args.input, exts)

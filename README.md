@@ -207,6 +207,22 @@ racebib ocr --input ./photos --output results.csv --annotate-dir ./annotated
 racebib ocr --input ./photos --output results.csv --bib-pattern "\d{4}"
 ```
 
+**Aggressive mode (better detection, slower):**
+```bash
+racebib ocr --input ./photos --output results.csv --aggressive
+```
+- Lowers confidence threshold to 40
+- Tries more PSM modes (6, 7, 8, 11, 13)
+- Tries more rotation angles
+- Use if you're missing bib numbers
+
+**Improving detection accuracy:**
+1. **Lower confidence threshold** if missing bibs: `--min-conf 40` or `--min-conf 50`
+2. **Use aggressive mode**: `--aggressive` (tries more combinations)
+3. **Check annotated images**: `--annotate-dir ./annotated` to see what OCR detects
+4. **Try different PSM modes**: `--psm 8 13` (good for single numbers/words)
+5. **Add more rotations**: `--rotations 0 45 90 -45 -90 180` if bibs are tilted
+
 **Step 3: Query for specific bib numbers**
 ```bash
 racebib query --bib 1234 --db bibdb.json
