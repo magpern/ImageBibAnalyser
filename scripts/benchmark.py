@@ -4,6 +4,7 @@ Benchmark Tool — measures performance of bib detection on a set of images.
 Usage:
   python benchmark.py --input ./photos --output benchmark.json --limit 500
 """
+
 import argparse
 import json
 import sys
@@ -13,6 +14,7 @@ from typing import Dict
 
 try:
     import psutil
+
     HAS_PSUTIL = True
 except ImportError:
     HAS_PSUTIL = False
@@ -26,6 +28,7 @@ try:
     )
 except ImportError:
     import sys
+
     sys.path.insert(0, str(Path(__file__).parent))
     from bib_finder import (
         gather_images,
@@ -36,17 +39,17 @@ except ImportError:
 
 def get_memory_usage() -> Dict[str, float]:
     """Get current memory usage statistics.
-    
+
     Returns:
         Dict with memory statistics in MB
     """
     if not HAS_PSUTIL:
         return {"available": 0, "used": 0, "percent": 0}
-    
+
     process = psutil.Process()
     mem_info = process.memory_info()
     system_mem = psutil.virtual_memory()
-    
+
     return {
         "process_rss_mb": mem_info.rss / (1024 * 1024),  # Resident Set Size
         "process_vms_mb": mem_info.vms / (1024 * 1024),  # Virtual Memory Size
@@ -66,7 +69,7 @@ def run_benchmark(
     min_conf: int = 60,
 ) -> Dict:
     """Run benchmark on image set.
-    
+
     Args:
         input_dir: Directory with images
         output_path: Path to save benchmark results
@@ -75,33 +78,33 @@ def run_benchmark(
         min_digits: Minimum bib digits
         max_digits: Maximum bib digits
         min_conf: Minimum confidence threshold
-        
+
     Returns:
         Dict with benchmark results
     """
     print(f"Starting benchmark on {limit} images...")
     print(f"Input directory: {input_dir}")
     print(f"Workers: {workers}")
-    
+
     # Gather images
     exts = (".jpg", ".jpeg", ".png")
     paths = gather_images(input_dir, exts)
-    
+
     if not paths:
         raise ValueError(f"No images found in {input_dir}")
-    
+
     if len(paths) > limit:
         paths = paths[:limit]
         print(f"Limited to first {limit} images (found {len(paths)} total)")
     else:
         print(f"Processing {len(paths)} images")
-    
+
     # Build regex
     bib_regex = build_bib_regex(min_digits, max_digits)
-    
+
     # Get initial memory
     mem_before = get_memory_usage()
-    
+
     # Run benchmark
     start_time = time.time()
     results = process_all(
@@ -114,17 +117,17 @@ def run_benchmark(
         annotate_dir=None,  # Skip annotation for benchmark
     )
     end_time = time.time()
-    
+
     # Get final memory
     mem_after = get_memory_usage()
-    
+
     # Calculate statistics
     elapsed_time = end_time - start_time
     images_per_second = len(paths) / elapsed_time if elapsed_time > 0 else 0
-    
+
     total_bibs = sum(len(bibs) for _, bibs, _ in results)
     images_with_bibs = sum(1 for _, bibs, _ in results if bibs)
-    
+
     benchmark_results = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "input_directory": str(input_dir),
@@ -144,8 +147,12 @@ def run_benchmark(
             "before_mb": mem_before,
             "after_mb": mem_after,
             "delta_mb": {
-                "process_rss": round(mem_after.get("process_rss_mb", 0) - mem_before.get("process_rss_mb", 0), 2),
-                "process_vms": round(mem_after.get("process_vms_mb", 0) - mem_before.get("process_vms_mb", 0), 2),
+                "process_rss": round(
+                    mem_after.get("process_rss_mb", 0) - mem_before.get("process_rss_mb", 0), 2
+                ),
+                "process_vms": round(
+                    mem_after.get("process_vms_mb", 0) - mem_before.get("process_vms_mb", 0), 2
+                ),
             },
         },
         "results": {
@@ -157,12 +164,12 @@ def run_benchmark(
             "detection_rate": round(images_with_bibs / len(paths) * 100, 2) if paths else 0,
         },
     }
-    
+
     # Save results
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(benchmark_results, f, indent=2, ensure_ascii=False)
-    
+
     # Print summary
     print("\n" + "=" * 60)
     print("BENCHMARK RESULTS")
@@ -174,16 +181,24 @@ def run_benchmark(
     print(f"  Images with bibs: {images_with_bibs}")
     print(f"  Images without bibs: {len(paths) - images_with_bibs}")
     print(f"  Total bibs detected: {total_bibs}")
-    print(f"  Average bibs per image: {total_bibs/len(paths):.2f}" if paths else "  Average bibs per image: 0.00")
-    print(f"  Detection rate: {images_with_bibs/len(paths)*100:.2f}%" if paths else "  Detection rate: 0.00%")
+    print(
+        f"  Average bibs per image: {total_bibs/len(paths):.2f}"
+        if paths
+        else "  Average bibs per image: 0.00"
+    )
+    print(
+        f"  Detection rate: {images_with_bibs/len(paths)*100:.2f}%"
+        if paths
+        else "  Detection rate: 0.00%"
+    )
     print(f"\nMemory Usage:")
     print(f"  Process RSS: {mem_after.get('process_rss_mb', 0):.2f} MB")
     print(f"  Process VMS: {mem_after.get('process_vms_mb', 0):.2f} MB")
-    if mem_before.get('process_rss_mb', 0) > 0:
+    if mem_before.get("process_rss_mb", 0) > 0:
         print(f"  RSS Delta: {benchmark_results['memory']['delta_mb']['process_rss']:.2f} MB")
     print(f"\nResults saved to: {output_path}")
     print("=" * 60)
-    
+
     return benchmark_results
 
 
@@ -196,13 +211,13 @@ def main():
     ap.add_argument("--min-digits", type=int, default=2, help="Minimum bib digits")
     ap.add_argument("--max-digits", type=int, default=6, help="Maximum bib digits")
     ap.add_argument("--min-conf", type=int, default=60, help="Minimum OCR confidence")
-    
+
     args = ap.parse_args()
-    
+
     if not args.input.exists():
         print(f"Error: Input directory not found: {args.input}", file=sys.stderr)
         sys.exit(1)
-    
+
     try:
         run_benchmark(
             input_dir=args.input,
@@ -220,4 +235,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

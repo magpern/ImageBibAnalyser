@@ -1,6 +1,7 @@
 """
 Race Bib Analyzer CLI — main entry point for racebib commands.
 """
+
 import sys
 from pathlib import Path
 
@@ -15,18 +16,21 @@ def main():
         print("  query     Query database for image URLs containing specific bib numbers")
         print("\nUse 'racebib <command> --help' for command-specific help")
         sys.exit(1)
-    
+
     command = sys.argv[1]
     sys.argv = sys.argv[1:]  # Remove 'racebib' from argv
-    
+
     if command == "download":
         from gallery_downloader import main as download_main
+
         download_main()
     elif command == "ocr":
         from bib_finder import main as ocr_main
+
         ocr_main()
     elif command == "query":
         from bib_query import main as query_main
+
         query_main()
     else:
         print(f"Unknown command: {command}")
@@ -36,4 +40,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -6,6 +6,7 @@ Usage:
   python bib_query.py --bib 1234 --bib 5678 --db bibdb.json --format json
   python bib_query.py --bib 1234 --bib 5678 --db bibdb.json --all --min-confidence 70
 """
+
 import argparse
 import json
 import sys
@@ -17,6 +18,7 @@ try:
 except ImportError:
     # Handle import when running as module
     import sys
+
     sys.path.insert(0, str(Path(__file__).parent))
     from bib_storage import BibStorage
 
@@ -47,30 +49,22 @@ def main():
         "--bib",
         action="append",
         required=True,
-        help="Bib number to search for (can be specified multiple times)"
+        help="Bib number to search for (can be specified multiple times)",
     )
     ap.add_argument(
-        "--db",
-        required=True,
-        type=Path,
-        help="Path to bib storage database (JSON file)"
+        "--db", required=True, type=Path, help="Path to bib storage database (JSON file)"
     )
     ap.add_argument(
         "--format",
         choices=["text", "json", "csv"],
         default="text",
-        help="Output format (default: text)"
+        help="Output format (default: text)",
     )
     ap.add_argument(
-        "--min-confidence",
-        type=float,
-        default=None,
-        help="Minimum confidence threshold (0-100)"
+        "--min-confidence", type=float, default=None, help="Minimum confidence threshold (0-100)"
     )
     ap.add_argument(
-        "--all",
-        action="store_true",
-        help="Require all specified bibs to be present (default: any)"
+        "--all", action="store_true", help="Require all specified bibs to be present (default: any)"
     )
 
     args = ap.parse_args()
@@ -111,4 +105,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

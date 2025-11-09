@@ -17,6 +17,7 @@ Notes:
   - Works with absolute and relative <img src> URLs.
   - Skips duplicates and supports simple retries.
 """
+
 import argparse
 import hashlib
 import os
@@ -32,12 +33,14 @@ from typing import List, Optional, Tuple
 import requests
 from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
+
 try:
     from requests.packages.urllib3.util.retry import Retry
 except ImportError:
     from urllib3.util.retry import Retry
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from tqdm import tqdm
+
 
 def thumb_to_full(url: str) -> str:
     parts = urlsplit(url)
@@ -51,13 +54,15 @@ def thumb_to_full(url: str) -> str:
     new_path = f"{dirpath}/{new_filename}" if dirpath else new_filename
     return urlunsplit((parts.scheme, parts.netloc, new_path, parts.query, parts.fragment))
 
+
 def sanitize_filename(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", name)
+
 
 def make_session() -> requests.Session:
     """Create a requests session with retry strategy and proper headers."""
     s = requests.Session()
-    
+
     # Configure retry strategy with exponential backoff
     retry_strategy = Retry(
         total=5,
@@ -65,35 +70,31 @@ def make_session() -> requests.Session:
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET", "HEAD"],
     )
-    
-    adapter = HTTPAdapter(
-        max_retries=retry_strategy,
-        pool_connections=20,
-        pool_maxsize=20
-    )
+
+    adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=20, pool_maxsize=20)
     s.mount("http://", adapter)
     s.mount("https://", adapter)
-    s.headers.update({
-        "User-Agent": "gallery-downloader/1.0 (+https://example.local)"
-    })
+    s.headers.update({"User-Agent": "gallery-downloader/1.0 (+https://example.local)"})
     return s
+
 
 @dataclass
 class DownloadItem:
     thumb_url: str
     full_url: str
 
+
 def discover_images(page_url: str, selector: str, session: requests.Session) -> List[DownloadItem]:
     """Discover images from a gallery page.
-    
+
     Args:
         page_url: URL of the gallery page
         selector: CSS selector to find image elements
         session: Requests session
-        
+
     Returns:
         List of DownloadItem objects
-        
+
     Raises:
         requests.RequestException: If page cannot be fetched
     """
@@ -102,7 +103,7 @@ def discover_images(page_url: str, selector: str, session: requests.Session) -> 
         r.raise_for_status()
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f"Failed to fetch gallery page {page_url}: {e}") from e
-    
+
     soup = BeautifulSoup(r.text, "html.parser")
     elements = soup.select(selector)
 
@@ -123,6 +124,7 @@ def discover_images(page_url: str, selector: str, session: requests.Session) -> 
             unique.append(it)
     return unique
 
+
 def choose_target_path(out_dir: Path, url: str) -> Path:
     filename = urlsplit(url).path.rsplit("/", 1)[-1] or "image"
     filename = sanitize_filename(filename)
@@ -138,6 +140,7 @@ def choose_target_path(out_dir: Path, url: str) -> Path:
             return candidate
         i += 1
 
+
 def download_one(
     session: requests.Session,
     url: str,
@@ -146,19 +149,19 @@ def download_one(
     max_retries: int = 3,
 ) -> Tuple[str, Optional[str]]:
     """Download a single file with retry logic and exponential backoff.
-    
+
     Args:
         session: Requests session
         url: URL to download
         dest: Destination file path
         timeout: Request timeout in seconds
         max_retries: Maximum number of retry attempts
-        
+
     Returns:
         Tuple of (url, error_message) where error_message is None on success
     """
     last_error = None
-    
+
     for attempt in range(max_retries):
         try:
             with session.get(url, stream=True, timeout=timeout) as resp:
@@ -167,21 +170,21 @@ def download_one(
                     return url, "404 Not Found"
                 elif resp.status_code == 429:
                     # Rate limited - wait with exponential backoff
-                    wait_time = (2 ** attempt) + (random.random() * 0.1)
+                    wait_time = (2**attempt) + (random.random() * 0.1)
                     if attempt < max_retries - 1:
                         time.sleep(wait_time)
                         continue
                     return url, f"429 Rate Limited (after {max_retries} attempts)"
                 elif resp.status_code >= 500:
                     # Server error - retry with backoff
-                    wait_time = (2 ** attempt) + (random.random() * 0.1)
+                    wait_time = (2**attempt) + (random.random() * 0.1)
                     if attempt < max_retries - 1:
                         time.sleep(wait_time)
                         continue
                     return url, f"{resp.status_code} Server Error (after {max_retries} attempts)"
-                
+
                 resp.raise_for_status()
-                
+
                 # Download file
                 tmp = dest.with_suffix(dest.suffix + ".part")
                 with open(tmp, "wb") as f:
@@ -190,25 +193,26 @@ def download_one(
                             f.write(chunk)
                 os.replace(tmp, dest)
                 return url, None
-                
+
         except requests.exceptions.Timeout as e:
             last_error = f"Timeout: {str(e)}"
             if attempt < max_retries - 1:
-                time.sleep((2 ** attempt) + (random.random() * 0.1))
+                time.sleep((2**attempt) + (random.random() * 0.1))
         except requests.exceptions.RequestException as e:
             last_error = f"Request error: {str(e)}"
             # Don't retry on client errors (4xx except 429)
-            if hasattr(e.response, 'status_code') and 400 <= e.response.status_code < 500:
+            if hasattr(e.response, "status_code") and 400 <= e.response.status_code < 500:
                 if e.response.status_code != 429:
                     return url, f"{e.response.status_code} Client Error: {str(e)}"
             if attempt < max_retries - 1:
-                time.sleep((2 ** attempt) + (random.random() * 0.1))
+                time.sleep((2**attempt) + (random.random() * 0.1))
         except Exception as e:
             last_error = f"Unexpected error: {str(e)}"
             if attempt < max_retries - 1:
-                time.sleep((2 ** attempt) + (random.random() * 0.1))
-    
+                time.sleep((2**attempt) + (random.random() * 0.1))
+
     return url, last_error or "Unknown error"
+
 
 def download_all(items: List[DownloadItem], out_dir: Path, concurrency: int = 8) -> Tuple[int, int]:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -230,11 +234,14 @@ def download_all(items: List[DownloadItem], out_dir: Path, concurrency: int = 8)
                 fail += 1
     return ok, fail
 
+
 def main():
     ap = argparse.ArgumentParser(description="Download full images from a gallery page")
     ap.add_argument("--url", required=True, help="Page URL to scrape")
     ap.add_argument("--out", required=True, type=Path, help="Output folder")
-    ap.add_argument("--selector", default=".galleria-thumbnails img", help="CSS selector to find thumbnails")
+    ap.add_argument(
+        "--selector", default=".galleria-thumbnails img", help="CSS selector to find thumbnails"
+    )
     ap.add_argument("--concurrency", type=int, default=8, help="Parallel downloads")
 
     args = ap.parse_args()
@@ -248,6 +255,7 @@ def main():
     print(f"Discovered {len(items)} images.")
     ok, fail = download_all(items, args.out, concurrency=args.concurrency)
     print(f"Done. Successful: {ok}, Failed: {fail}")
+
 
 if __name__ == "__main__":
     main()

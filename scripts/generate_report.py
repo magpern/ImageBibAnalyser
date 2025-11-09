@@ -4,6 +4,7 @@ HTML Report Generator — creates an HTML report summarizing bib detection resul
 Usage:
   python generate_report.py --db bibdb.json --output report.html --annotated-dir annotated/
 """
+
 import argparse
 import json
 import sys
@@ -16,6 +17,7 @@ try:
     from bib_storage import BibStorage
 except ImportError:
     import sys
+
     sys.path.insert(0, str(Path(__file__).parent))
     from bib_storage import BibStorage
 
@@ -26,7 +28,7 @@ def generate_html_report(
     annotated_dir: Path | None = None,
 ) -> None:
     """Generate HTML report from bib storage database.
-    
+
     Args:
         storage: BibStorage instance
         output_path: Path to output HTML file
@@ -34,22 +36,23 @@ def generate_html_report(
     """
     stats = storage.get_stats()
     all_urls = storage.get_all_urls()
-    
+
     # Collect data for report
     entries = []
     for url in all_urls:
         entry = storage.get_entry(url)
         if entry:
             entries.append(entry)
-    
+
     # Sort by number of bibs detected (descending)
-    entries.sort(key=lambda e: len(e.get('bibs', [])), reverse=True)
-    
+    entries.sort(key=lambda e: len(e.get("bibs", [])), reverse=True)
+
     # Generate HTML
     html_parts = []
-    
+
     # HTML header
-    html_parts.append("""<!DOCTYPE html>
+    html_parts.append(
+        """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -157,24 +160,34 @@ def generate_html_report(
 <body>
     <div class="header">
         <h1>Race Bib Detection Report</h1>
-        <p>Generated: """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + """</p>
+        <p>Generated: """
+        + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        + """</p>
     </div>
     
     <div class="stats">
         <div class="stat-card">
-            <div class="stat-value">""" + str(stats['total_images']) + """</div>
+            <div class="stat-value">"""
+        + str(stats["total_images"])
+        + """</div>
             <div class="stat-label">Total Images</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">""" + str(stats['unique_bibs']) + """</div>
+            <div class="stat-value">"""
+        + str(stats["unique_bibs"])
+        + """</div>
             <div class="stat-label">Unique Bibs</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">""" + str(stats['total_detections']) + """</div>
+            <div class="stat-value">"""
+        + str(stats["total_detections"])
+        + """</div>
             <div class="stat-label">Total Detections</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">""" + f"{stats['avg_bibs_per_image']:.2f}" + """</div>
+            <div class="stat-value">"""
+        + f"{stats['avg_bibs_per_image']:.2f}"
+        + """</div>
             <div class="stat-label">Avg Bibs per Image</div>
         </div>
     </div>
@@ -184,55 +197,78 @@ def generate_html_report(
     </div>
     
     <div class="image-grid" id="imageGrid">
-""")
-    
+"""
+    )
+
     # Generate image cards
     for entry in entries:
-        url = entry['image_url']
-        bibs = entry.get('bibs', [])
-        local_path = entry.get('local_path')
-        confidences = entry.get('confidences', {})
-        
+        url = entry["image_url"]
+        bibs = entry.get("bibs", [])
+        local_path = entry.get("local_path")
+        confidences = entry.get("confidences", {})
+
         # Try to find annotated image
         img_src = None
         if annotated_dir and local_path:
-            annotated_path = Path(annotated_dir) / (Path(local_path).stem + "_annotated" + Path(local_path).suffix)
+            annotated_path = Path(annotated_dir) / (
+                Path(local_path).stem + "_annotated" + Path(local_path).suffix
+            )
             if annotated_path.exists():
                 img_src = str(annotated_path)
             elif Path(local_path).exists():
                 img_src = str(local_path)
         elif local_path and Path(local_path).exists():
             img_src = str(local_path)
-        
+
         # Create image card
-        html_parts.append("""        <div class="image-card" data-bibs="""" + " ".join(bibs) + """" data-url="""" + quote(url) + """">
-""")
-        
+        html_parts.append(
+            """        <div class="image-card" data-bibs="""
+            " + "
+            ".join(bibs) + "
+            """ data-url="""
+            " + quote(url) + "
+            """>
+"""
+        )
+
         if img_src:
-            html_parts.append(f"""            <img src="{quote(img_src)}" alt="Image" loading="lazy">
-""")
+            html_parts.append(
+                f"""            <img src="{quote(img_src)}" alt="Image" loading="lazy">
+"""
+            )
         else:
-            html_parts.append("""            <div style="height: 200px; background-color: #ecf0f1; display: flex; align-items: center; justify-content: center; color: #7f8c8d;">
+            html_parts.append(
+                """            <div style="height: 200px; background-color: #ecf0f1; display: flex; align-items: center; justify-content: center; color: #7f8c8d;">
                 No preview available
             </div>
-""")
-        
-        html_parts.append("""            <div class="image-info">
-                <div class="image-url">""" + html_escape(url[:80] + ("..." if len(url) > 80 else "")) + """</div>
+"""
+            )
+
+        html_parts.append(
+            """            <div class="image-info">
+                <div class="image-url">"""
+            + html_escape(url[:80] + ("..." if len(url) > 80 else ""))
+            + """</div>
                 <div class="bibs">
-""")
-        
+"""
+        )
+
         for bib in bibs:
             conf = confidences.get(bib, 0.0)
-            html_parts.append(f"""                    <span class="bib-badge" title="Confidence: {conf:.1f}%">{html_escape(bib)}</span>
-""")
-        
-        html_parts.append("""                </div>
+            html_parts.append(
+                f"""                    <span class="bib-badge" title="Confidence: {conf:.1f}%">{html_escape(bib)}</span>
+"""
+            )
+
+        html_parts.append(
+            """                </div>
             </div>
         </div>
-""")
-    
-    html_parts.append("""    </div>
+"""
+        )
+
+    html_parts.append(
+        """    </div>
     
     <script>
         function filterImages() {
@@ -268,13 +304,14 @@ def generate_html_report(
         }
     </script>
 </body>
-</html>""")
-    
+</html>"""
+    )
+
     # Write HTML file
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(''.join(html_parts))
-    
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("".join(html_parts))
+
     print(f"Generated HTML report: {output_path}")
     print(f"  - {stats['total_images']} images")
     print(f"  - {stats['unique_bibs']} unique bibs")
@@ -283,30 +320,34 @@ def generate_html_report(
 
 def html_escape(text: str) -> str:
     """Escape HTML special characters."""
-    return (text
-            .replace('&', '&amp;')
-            .replace('<', '&lt;')
-            .replace('>', '&gt;')
-            .replace('"', '&quot;')
-            .replace("'", '&#x27;'))
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+    )
 
 
 def main():
     ap = argparse.ArgumentParser(description="Generate HTML report from bib storage database")
-    ap.add_argument("--db", required=True, type=Path, help="Path to bib storage database (JSON file)")
+    ap.add_argument(
+        "--db", required=True, type=Path, help="Path to bib storage database (JSON file)"
+    )
     ap.add_argument("--output", required=True, type=Path, help="Output HTML file path")
-    ap.add_argument("--annotated-dir", type=Path, default=None, help="Directory with annotated images")
-    
+    ap.add_argument(
+        "--annotated-dir", type=Path, default=None, help="Directory with annotated images"
+    )
+
     args = ap.parse_args()
-    
+
     if not args.db.exists():
         print(f"Error: Database file not found: {args.db}", file=sys.stderr)
         sys.exit(1)
-    
+
     storage = BibStorage(args.db)
     generate_html_report(storage, args.output, args.annotated_dir)
 
 
 if __name__ == "__main__":
     main()
-
