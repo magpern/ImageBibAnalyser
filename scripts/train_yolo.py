@@ -84,8 +84,8 @@ def main():
     ap.add_argument(
         "--workers",
         type=int,
-        default=8,
-        help="Number of data loading workers",
+        default=2,
+        help="Number of data loading workers (reduced for Docker shared memory limits)",
     )
 
     args = ap.parse_args()
@@ -137,10 +137,19 @@ def main():
         print("Note: YOLO11 is recommended (better accuracy and speed)")
         sys.exit(1)
 
+    # Check for data.yaml file (Ultralytics expects YAML file path, not directory)
+    data_yaml = data_path / "data.yaml"
+    if data_yaml.exists():
+        data_arg = str(data_yaml)
+    else:
+        # Fallback: use directory path (Ultralytics might handle it)
+        data_arg = str(data_path)
+        print(f"Warning: data.yaml not found in {data_path}, using directory path")
+
     # Train
     try:
         results = model.train(
-            data=str(data_path),
+            data=data_arg,
             epochs=args.epochs,
             imgsz=args.imgsz,
             batch=args.batch,

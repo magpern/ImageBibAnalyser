@@ -324,26 +324,67 @@ results = model('./test_photos', save=True, conf=0.3)
 
 ## Example: Complete Training Workflow
 
-```bash
-# 1. Prepare dataset (if using helper script)
-python scripts/prepare_yolo_dataset.py --input ./photos --output ./yolo_dataset
+### Option 1: Using Roboflow (Easiest)
 
-# 2. Train model
-python scripts/train_yolo.py \
-  --data ./yolo_dataset \
+```bash
+# 1. Label images online at https://roboflow.com/
+#    - Upload photos
+#    - Draw bounding boxes around bibs
+#    - Export as YOLO format
+#    - Download dataset (already has train/val/test structure)
+
+# 2. Extract downloaded dataset to /data/yolo_dataset
+#    (Roboflow already organizes it correctly)
+
+# 3. Train model
+docker run --gpus all --rm -v ${PWD}/data:/data \
+  bibanalyser-train:latest \
+  python -m scripts.train_yolo \
+  --data /data/yolo_dataset \
   --epochs 100 \
   --imgsz 640 \
   --batch 16 \
   --name bib_detector \
   --device 0
 
-# 3. Test on validation set
+# 4. Use trained model
+racebib yolo --input ./new_photos \
+  --output ./results.csv \
+  --weights ./runs/detect/bib_detector/weights/best.pt \
+  --db bibdb.json \
+  --image-url https://example.com/gallery/
+```
+
+### Option 2: Using LabelImg (Desktop)
+
+```bash
+# 1. Label images with LabelImg
+#    - Open LabelImg
+#    - Select YOLO format
+#    - Draw boxes around bibs
+#    - Save labels (creates .txt files)
+
+# 2. Organize into YOLO structure
+python scripts/prepare_yolo_dataset.py --input ./photos --output ./yolo_dataset
+
+# 3. Train model
+docker run --gpus all --rm -v ${PWD}/data:/data \
+  bibanalyser-train:latest \
+  python -m scripts.train_yolo \
+  --data /data/yolo_dataset \
+  --epochs 100 \
+  --imgsz 640 \
+  --batch 16 \
+  --name bib_detector \
+  --device 0
+
+# 4. Test on validation set
 racebib yolo --input ./yolo_dataset/val/images \
   --output ./val_results.csv \
   --weights ./runs/detect/bib_detector/weights/best.pt \
   --annotate-dir ./val_annotated
 
-# 4. Use on new images
+# 5. Use on new images
 racebib yolo --input ./new_photos \
   --output ./results.csv \
   --weights ./runs/detect/bib_detector/weights/best.pt \

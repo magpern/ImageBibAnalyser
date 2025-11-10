@@ -352,7 +352,22 @@ If the classic OCR approach (Tesseract + preprocessing) struggles, you can switc
 
 **Quick Training Guide:**
 
-1. **Label your images** using [LabelImg](https://github.com/HumanSignal/labelImg) or similar tool
+1. **Label your images** - Use one of these tools to draw bounding boxes around bib numbers:
+   
+   **Online Tools (Easiest):**
+   - **[Roboflow](https://roboflow.com/)** ⭐ Recommended - Free tier, auto-format conversion, team collaboration
+   - **[CVAT](https://cvat.org/)** - Web-based, open-source, good for teams
+   - **[Label Studio](https://labelstud.io/)** - Open-source, web-based, supports many formats
+   
+   **Desktop Tools:**
+   - **[LabelImg](https://github.com/HumanSignal/labelImg)** - Free, simple, works offline
+   - **[LabelMe](https://github.com/wkentaro/labelme)** - MIT, supports polygons and other shapes
+   
+   **Quick Start with Roboflow (Recommended):**
+   1. Upload your race photos to [Roboflow](https://roboflow.com/)
+   2. Draw bounding boxes around each bib number
+   3. Export in YOLO format
+   4. Download the dataset (already organized into train/val/test)
 2. **Prepare dataset structure:**
    
    **What is `/data/yolo_dataset`?**
@@ -393,7 +408,13 @@ If the classic OCR approach (Tesseract + preprocessing) struggles, you can switc
 3. **Train the model:**
    
    **Using Docker (with GPU support):**
-   
+
+
+
+
+
+
+
    **Build and train locally:**
    ```bash
    # Build the training image
