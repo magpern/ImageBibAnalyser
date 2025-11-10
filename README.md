@@ -18,14 +18,26 @@ A Docker-first application for downloading race photos and extracting bib number
 
 ### Build the Docker Image
 
+**For inference (OCR, download, query):**
 ```bash
 docker build -t bibanalyser:latest .
+```
+
+**For training YOLO models (requires GPU):**
+```bash
+docker build -f Dockerfile.train -t bibanalyser-train:latest .
 ```
 
 Or pull from GitHub Container Registry (after pushing):
 
 ```bash
+# Inference image (for OCR, download, query)
 docker pull ghcr.io/magpern/ImageBibAnalyser:latest
+
+# Training image (for YOLO model training, requires GPU)
+# Note: Training image must be built manually via GitHub Actions workflow
+# or built locally: docker build -f Dockerfile.train -t bibanalyser-train:latest .
+docker pull ghcr.io/magpern/ImageBibAnalyser-train:latest
 ```
 
 ### Download Images
@@ -330,13 +342,55 @@ python scripts/generate_report.py --db bibdb.json --output report.html --annotat
 
 ---
 
-### YOLO + PaddleOCR Pipeline (Advanced / Experimental)
+### YOLO + PaddleOCR Pipeline (Advanced / Recommended for Better Accuracy)
 
-If the classic OCR approach (Tesseract + preprocessing) struggles, you can switch to a deep-learning pipeline that uses a YOLO detector for bib regions and PaddleOCR for text recognition.
+If the classic OCR approach (Tesseract + preprocessing) struggles, you can switch to a deep-learning pipeline that uses a YOLO detector for bib regions and PaddleOCR for text recognition. This typically provides **much better accuracy** than traditional OCR.
 
 **Requirements:**
-- A YOLO model trained to detect bib numbers (`.pt` file). You can train with [Ultralytics YOLOv8](https://docs.ultralytics.com) on your labeled bib dataset.
+- A YOLO model trained to detect bib numbers (`.pt` file). See [Training Guide](docs/yolo_training.md) for how to train your own model.
 - PaddleOCR for recognition (already included in Docker image after rebuild).
+
+**Quick Training Guide:**
+
+1. **Label your images** using [LabelImg](https://github.com/HumanSignal/labelImg) or similar tool
+2. **Prepare dataset structure:**
+   ```bash
+   # Using Docker
+   docker run --rm -v ${PWD}/data:/data bibanalyser:latest \
+     python3 -m scripts.prepare_yolo_dataset --input /data/photos --output /data/yolo_dataset
+   
+   # Or locally
+   python scripts/prepare_yolo_dataset.py --input ./photos --output ./yolo_dataset
+   ```
+3. **Train the model:**
+   
+   **Using Docker (with GPU support):**
+   ```bash
+   # Option 1: Build training image locally
+   docker build -f Dockerfile.train -t bibanalyser-train:latest .
+   
+   # Option 2: Pull from GitHub Container Registry (after pushing)
+   docker pull ghcr.io/magpern/ImageBibAnalyser-train:latest
+   
+   # Train with GPU
+   docker run --gpus all --rm -v ${PWD}/data:/data \
+     ghcr.io/magpern/ImageBibAnalyser-train:latest \
+     python -m scripts.train_yolo \
+     --data /data/yolo_dataset --epochs 100 --name bib_detector --device 0
+   ```
+   
+   **Using local Python:**
+   ```bash
+   python scripts/train_yolo.py --data ./yolo_dataset --epochs 100 --name bib_detector
+   ```
+   
+   By default uses YOLO11 (better accuracy and speed). Use `--model yolov8n.pt` for YOLOv8 if needed.
+4. **Use the trained model:**
+   ```bash
+   racebib yolo --input ./photos --output ./results.csv --weights ./runs/detect/bib_detector/weights/best.pt
+   ```
+
+See [docs/yolo_training.md](docs/yolo_training.md) for detailed training instructions.
 
 **Basic command (Docker):**
 ```bash
@@ -428,23 +482,36 @@ python scripts/generate_report.py --db bibdb.json --output report.html
 - `scripts/` - Main application scripts
   - `gallery_downloader.py` - Download images from gallery pages
   - `bib_finder.py` - OCR pipeline for bib detection
-  - `bib_yolo.py` - YOLO + PaddleOCR pipeline for advanced detection
+  - `bib_yolo.py` - YOLO-based bib detection with PaddleOCR
+  - `train_yolo.py` - YOLO model training script
+  - `prepare_yolo_dataset.py` - Dataset preparation helper
   - `bib_storage.py` - Storage module for bib-to-URL mappings
   - `bib_query.py` - Query command for finding bibs
+  - `bib_train.py` - OCR parameter training/validation
   - `generate_report.py` - HTML report generator
   - `benchmark.py` - Performance benchmarking tool
   - `cli.py` - Main CLI entry point
 - `tests/` - Unit tests
 - `docs/` - Documentation
-- `Dockerfile` - Docker container definition
+  - `yolo_training.md` - YOLO training guide
+- `Dockerfile` - Docker container definition (for inference)
+- `Dockerfile.train` - Docker container for YOLO training (with GPU support)
 - `.github/workflows/ci.yml` - CI/CD pipeline
 
 ## CI/CD
 
-The project includes GitHub Actions workflow that:
-- Runs linting and tests
-- Builds Docker image
-- Pushes to GitHub Container Registry (ghcr.io)
+The project includes GitHub Actions workflows:
+
+**Main CI/CD Pipeline** (`.github/workflows/ci.yml`):
+- Runs linting and tests on every push/PR
+- Builds and pushes inference Docker image on version tags (v*)
+- Pushes to GitHub Container Registry: `ghcr.io/magpern/ImageBibAnalyser`
+
+**Training Image Build** (`.github/workflows/build-train.yml`):
+- Manual workflow (trigger via GitHub Actions UI)
+- Builds and pushes training Docker image with GPU support
+- Pushes to GitHub Container Registry: `ghcr.io/magpern/ImageBibAnalyser-train`
+- Can also be triggered on version tags if needed
 
 ## License
 
