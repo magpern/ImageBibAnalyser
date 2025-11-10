@@ -168,24 +168,44 @@ def gather_images(root: Path, exts: Tuple[str, ...]) -> List[Path]:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="YOLO-based Bib Detector with optional OCR recognition")
+    ap = argparse.ArgumentParser(
+        description="YOLO-based Bib Detector with optional OCR recognition"
+    )
     ap.add_argument("--input", required=True, type=Path, help="Folder with images")
     ap.add_argument("--output", required=True, type=Path, help="Output CSV path")
-    ap.add_argument("--weights", required=True, type=Path, help="YOLO weights file trained for bib detection")
-    ap.add_argument("--ext", nargs="+", default=(".jpg", ".jpeg", ".png"), help="Image extensions to include")
-    ap.add_argument("--conf", type=float, default=0.3, help="YOLO confidence threshold (default: 0.3)")
-    ap.add_argument("--iou", type=float, default=0.45, help="YOLO IoU threshold for NMS (default: 0.45)")
-    ap.add_argument("--device", type=str, default="cpu", help="Device to run YOLO on (cpu, cuda, cuda:0, etc.)")
-    ap.add_argument("--class-id", type=int, default=0, help="YOLO class ID corresponding to bibs (default: 0)")
+    ap.add_argument(
+        "--weights", required=True, type=Path, help="YOLO weights file trained for bib detection"
+    )
+    ap.add_argument(
+        "--ext", nargs="+", default=(".jpg", ".jpeg", ".png"), help="Image extensions to include"
+    )
+    ap.add_argument(
+        "--conf", type=float, default=0.3, help="YOLO confidence threshold (default: 0.3)"
+    )
+    ap.add_argument(
+        "--iou", type=float, default=0.45, help="YOLO IoU threshold for NMS (default: 0.45)"
+    )
+    ap.add_argument(
+        "--device", type=str, default="cpu", help="Device to run YOLO on (cpu, cuda, cuda:0, etc.)"
+    )
+    ap.add_argument(
+        "--class-id", type=int, default=0, help="YOLO class ID corresponding to bibs (default: 0)"
+    )
     ap.add_argument(
         "--bib-pattern",
         type=str,
         default=None,
         help="Custom regex pattern for bib numbers (overrides min/max digits)",
     )
-    ap.add_argument("--min-digits", type=int, default=2, help="Minimum bib digits if regex not provided")
-    ap.add_argument("--max-digits", type=int, default=6, help="Maximum bib digits if regex not provided")
-    ap.add_argument("--disable-ocr", action="store_true", help="Disable OCR and only output detections")
+    ap.add_argument(
+        "--min-digits", type=int, default=2, help="Minimum bib digits if regex not provided"
+    )
+    ap.add_argument(
+        "--max-digits", type=int, default=6, help="Maximum bib digits if regex not provided"
+    )
+    ap.add_argument(
+        "--disable-ocr", action="store_true", help="Disable OCR and only output detections"
+    )
     ap.add_argument(
         "--ocr-lang",
         type=str,
@@ -193,9 +213,18 @@ def main() -> None:
         help="PaddleOCR language code (default: en). See PaddleOCR docs for options.",
     )
     ap.add_argument("--use-gpu", action="store_true", help="Use GPU for PaddleOCR if available")
-    ap.add_argument("--annotate-dir", type=Path, default=None, help="Save annotated images with detections here")
-    ap.add_argument("--save-crops", type=Path, default=None, help="If set, save cropped bib regions to this folder")
-    ap.add_argument("--db", type=Path, default=None, help="Path to bib storage database (JSON file)")
+    ap.add_argument(
+        "--annotate-dir", type=Path, default=None, help="Save annotated images with detections here"
+    )
+    ap.add_argument(
+        "--save-crops",
+        type=Path,
+        default=None,
+        help="If set, save cropped bib regions to this folder",
+    )
+    ap.add_argument(
+        "--db", type=Path, default=None, help="Path to bib storage database (JSON file)"
+    )
     ap.add_argument(
         "--image-url",
         type=str,
@@ -210,7 +239,10 @@ def main() -> None:
         sys.exit(1)
 
     if args.disable_ocr and (args.db is not None):
-        print("Warning: --disable-ocr is set, database will only store detection metadata.", file=sys.stderr)
+        print(
+            "Warning: --disable-ocr is set, database will only store detection metadata.",
+            file=sys.stderr,
+        )
 
     bib_regex: Optional[re.Pattern] = None
     if args.bib_pattern:
@@ -270,7 +302,9 @@ def main() -> None:
                 crop = crop_image(img, (x1, y1, x2, y2))
                 ocr_hits: List[Tuple[str, float]] = []
                 if ocr is not None:
-                    ocr_hits = run_ocr_on_crop(ocr, crop, bib_regex, args.min_digits, args.max_digits)
+                    ocr_hits = run_ocr_on_crop(
+                        ocr, crop, bib_regex, args.min_digits, args.max_digits
+                    )
 
                 if not ocr_hits and ocr is None:
                     # Store detection without OCR
@@ -332,9 +366,7 @@ def main() -> None:
         if storage:
             if args.image_url:
                 rel_path = img_path.relative_to(args.input)
-                image_url = (
-                    args.image_url.rstrip("/") + "/" + str(rel_path).replace("\\", "/")
-                )
+                image_url = args.image_url.rstrip("/") + "/" + str(rel_path).replace("\\", "/")
             else:
                 image_url = str(img_path)
 
@@ -386,5 +418,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
