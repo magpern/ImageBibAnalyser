@@ -96,6 +96,7 @@ bibdb.json
 benchmark.json
 report.html
 .ultralytics/
+.paddlex/
 
 # Docker
 .dockerignore

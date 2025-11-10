@@ -32,6 +32,14 @@ RUN chmod +x scripts/*.py
 # Set Python path to include scripts directory
 ENV PYTHONPATH=/app/scripts
 
+# Set Ultralytics config directory to persistent location
+# This stores settings, downloaded models cache, and training metadata
+ENV YOLO_CONFIG_DIR=/app/.ultralytics
+
+# Create Ultralytics config directory structure and make it writable
+# Ultralytics creates a nested "Ultralytics" subdirectory inside YOLO_CONFIG_DIR
+RUN mkdir -p /app/.ultralytics/Ultralytics && chmod -R 777 /app/.ultralytics
+
 # Create wrapper script for racebib command
 RUN echo '#!/bin/bash' > /usr/local/bin/racebib && \
     echo 'cd /app && python -m scripts.cli "$@"' >> /usr/local/bin/racebib && \
