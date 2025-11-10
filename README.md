@@ -354,22 +354,63 @@ If the classic OCR approach (Tesseract + preprocessing) struggles, you can switc
 
 1. **Label your images** using [LabelImg](https://github.com/HumanSignal/labelImg) or similar tool
 2. **Prepare dataset structure:**
+   
+   **What is `/data/yolo_dataset`?**
+   
+   It's a YOLO-formatted dataset containing:
+   - **Images**: Race photos with bib numbers visible
+   - **Labels**: Text files (`.txt`) with bounding box coordinates for each bib in the image
+   - **Structure**: Organized into `train/`, `val/`, and optionally `test/` splits
+   
    ```bash
-   # Using Docker
+   # Using Docker - creates directory structure (you still need to label images)
    docker run --rm -v ${PWD}/data:/data bibanalyser:latest \
      python3 -m scripts.prepare_yolo_dataset --input /data/photos --output /data/yolo_dataset
    
    # Or locally
    python scripts/prepare_yolo_dataset.py --input ./photos --output ./yolo_dataset
    ```
+   
+   **Dataset structure required:**
+   ```
+   yolo_dataset/
+   ├── train/
+   │   ├── images/     # Training images (e.g., photo1.jpg, photo2.jpg)
+   │   └── labels/     # YOLO label files (e.g., photo1.txt, photo2.txt)
+   ├── val/
+   │   ├── images/     # Validation images
+   │   └── labels/     # Validation labels
+   └── test/           # Optional test set
+   ```
+   
+   Each `.txt` label file contains bounding boxes in YOLO format (one line per bib):
+   ```
+   0 0.5 0.5 0.2 0.3   # class_id center_x center_y width height (normalized 0-1)
+   ```
+   Where `0` = bib class, and coordinates are relative to image size (0.0 to 1.0).
+   
+   See [docs/yolo_training.md](docs/yolo_training.md) for detailed dataset preparation guide.
 3. **Train the model:**
    
    **Using Docker (with GPU support):**
+   
+   **Build and train locally:**
    ```bash
-   # Option 1: Build training image locally
+   # Build the training image
    docker build -f Dockerfile.train -t bibanalyser-train:latest .
    
-   # Option 2: Pull from GitHub Container Registry (after pushing)
+   # Train with GPU
+   # Note: /data/yolo_dataset must contain train/images/, train/labels/, val/images/, val/labels/
+   # See docs/yolo_training.md for dataset preparation
+   docker run --gpus all --rm -v ${PWD}/data:/data \
+     bibanalyser-train:latest \
+     python -m scripts.train_yolo \
+     --data /data/yolo_dataset --epochs 100 --name bib_detector --device 0
+   ```
+   
+   **Or pull from GitHub Container Registry:**
+   ```bash
+   # Pull the training image (after building via GitHub Actions)
    docker pull ghcr.io/magpern/ImageBibAnalyser-train:latest
    
    # Train with GPU
@@ -377,6 +418,28 @@ If the classic OCR approach (Tesseract + preprocessing) struggles, you can switc
      ghcr.io/magpern/ImageBibAnalyser-train:latest \
      python -m scripts.train_yolo \
      --data /data/yolo_dataset --epochs 100 --name bib_detector --device 0
+   ```
+   
+   **Training examples:**
+   ```bash
+   # Quick training (50 epochs, nano model)
+   # Dataset structure: /data/yolo_dataset/train/{images,labels}/, /data/yolo_dataset/val/{images,labels}/
+   docker run --gpus all --rm -v ${PWD}/data:/data \
+     bibanalyser-train:latest \
+     python -m scripts.train_yolo \
+     --data /data/yolo_dataset --epochs 50 --model yolo11n.pt --batch 16 --name quick_train --device 0
+   
+   # High-accuracy training (200 epochs, medium model, larger images)
+   docker run --gpus all --rm -v ${PWD}/data:/data \
+     bibanalyser-train:latest \
+     python -m scripts.train_yolo \
+     --data /data/yolo_dataset --epochs 200 --model yolo11m.pt --imgsz 1280 --batch 8 --name high_acc --device 0
+   
+   # CPU-only training (no GPU needed, slower)
+   docker run --rm -v ${PWD}/data:/data \
+     bibanalyser-train:latest \
+     python -m scripts.train_yolo \
+     --data /data/yolo_dataset --epochs 50 --model yolo11n.pt --batch 4 --name cpu_train --device cpu
    ```
    
    **Using local Python:**
@@ -511,7 +574,15 @@ The project includes GitHub Actions workflows:
 - Manual workflow (trigger via GitHub Actions UI)
 - Builds and pushes training Docker image with GPU support
 - Pushes to GitHub Container Registry: `ghcr.io/magpern/ImageBibAnalyser-train`
-- Can also be triggered on version tags if needed
+- To trigger: Go to Actions → "Build Training Image" → "Run workflow"
+
+**Local Training Image Build:**
+```bash
+# Build training image locally
+docker build -f Dockerfile.train -t bibanalyser-train:latest .
+
+# Then use it for training (see examples above)
+```
 
 ## License
 

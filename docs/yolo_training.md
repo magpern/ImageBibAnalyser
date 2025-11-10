@@ -50,28 +50,40 @@ python scripts/prepare_yolo_dataset.py --input ./photos --output ./yolo_dataset
 
 ## Step 2: Organize Your Dataset
 
+**What is `/data/yolo_dataset`?**
+
+It's a YOLO-formatted dataset containing:
+- **Images**: Race photos with bib numbers visible
+- **Labels**: Text files (`.txt`) with bounding box coordinates for each bib in the image
+- **Structure**: Organized into `train/`, `val/`, and optionally `test/` splits
+
 Your dataset should look like this:
 
 ```
 yolo_dataset/
 ├── train/
 │   ├── images/
-│   │   ├── image1.jpg
-│   │   ├── image2.jpg
+│   │   ├── photo1.jpg          # Training images
+│   │   ├── photo2.jpg
 │   │   └── ...
 │   └── labels/
-│       ├── image1.txt
-│       ├── image2.txt
+│       ├── photo1.txt          # YOLO format labels (one per image)
+│       ├── photo2.txt
 │       └── ...
 ├── val/
-│   ├── images/
+│   ├── images/                  # Validation images (for testing during training)
+│   │   ├── photo100.jpg
+│   │   └── ...
 │   └── labels/
-└── test/
+│       ├── photo100.txt
+│       └── ...
+└── test/                        # Optional: test set
     ├── images/
     └── labels/
 ```
 
 **Label file format** (YOLO):
+Each `.txt` file contains one line per bib detected in the image:
 ```
 class_id center_x center_y width height
 ```
@@ -79,20 +91,50 @@ class_id center_x center_y width height
 For bib detection, you typically have one class (bib = class 0):
 ```
 0 0.5 0.5 0.2 0.3
+0 0.3 0.7 0.15 0.25
 ```
 
-Where coordinates are normalized (0-1) relative to image size.
+Where:
+- `0` = bib class (always 0 for single-class bib detection)
+- `center_x, center_y` = center of bounding box (normalized 0-1)
+- `width, height` = size of bounding box (normalized 0-1)
+- All coordinates are relative to image size (0.0 to 1.0)
+
+**Example**: If an image is 1000x800 pixels and a bib is at position (500, 200) with size 200x150:
+- center_x = 500/1000 = 0.5
+- center_y = 200/800 = 0.25
+- width = 200/1000 = 0.2
+- height = 150/800 = 0.1875
+- Label line: `0 0.5 0.25 0.2 0.1875`
 
 ## Step 3: Train the Model
 
 ### Quick Start (Using our helper script)
 
 **Using Docker (with GPU support):**
+
+**Build and train locally:**
 ```bash
-# Option 1: Build training image locally
+# Build the training image
 docker build -f Dockerfile.train -t bibanalyser-train:latest .
 
-# Option 2: Pull from GitHub Container Registry (after pushing)
+# Train with GPU
+# Dataset: /data/yolo_dataset must contain train/images/, train/labels/, val/images/, val/labels/
+# Each image needs a corresponding .txt file with YOLO-format bounding boxes
+docker run --gpus all --rm -v ${PWD}/data:/data \
+  bibanalyser-train:latest \
+  python -m scripts.train_yolo \
+  --data /data/yolo_dataset \
+  --epochs 100 \
+  --imgsz 640 \
+  --batch 16 \
+  --name bib_detector \
+  --device 0
+```
+
+**Or pull from GitHub Container Registry:**
+```bash
+# Pull the training image (after building via GitHub Actions)
 docker pull ghcr.io/magpern/ImageBibAnalyser-train:latest
 
 # Train with GPU
@@ -105,6 +147,63 @@ docker run --gpus all --rm -v ${PWD}/data:/data \
   --batch 16 \
   --name bib_detector \
   --device 0
+```
+
+**More Training Examples:**
+
+**Quick training (50 epochs, smaller model):**
+```bash
+docker run --gpus all --rm -v ${PWD}/data:/data \
+  bibanalyser-train:latest \
+  python -m scripts.train_yolo \
+  --data /data/yolo_dataset \
+  --epochs 50 \
+  --model yolo11n.pt \
+  --batch 16 \
+  --name bib_detector_quick \
+  --device 0
+```
+
+**High-accuracy training (larger model, more epochs):**
+```bash
+docker run --gpus all --rm -v ${PWD}/data:/data \
+  bibanalyser-train:latest \
+  python -m scripts.train_yolo \
+  --data /data/yolo_dataset \
+  --epochs 200 \
+  --model yolo11m.pt \
+  --imgsz 1280 \
+  --batch 8 \
+  --name bib_detector_high_accuracy \
+  --device 0
+```
+
+**CPU-only training (slower, no GPU needed):**
+```bash
+docker run --rm -v ${PWD}/data:/data \
+  bibanalyser-train:latest \
+  python -m scripts.train_yolo \
+  --data /data/yolo_dataset \
+  --epochs 50 \
+  --model yolo11n.pt \
+  --batch 4 \
+  --name bib_detector_cpu \
+  --device cpu
+```
+
+**Training with custom parameters:**
+```bash
+docker run --gpus all --rm -v ${PWD}/data:/data \
+  bibanalyser-train:latest \
+  python -m scripts.train_yolo \
+  --data /data/yolo_dataset \
+  --epochs 100 \
+  --imgsz 640 \
+  --batch 16 \
+  --name bib_detector \
+  --device 0 \
+  --patience 30 \
+  --workers 4
 ```
 
 **Using Local Python:**
