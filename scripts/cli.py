@@ -18,6 +18,7 @@ def main():
         print("  ocr       Extract bib numbers from images using OCR")
         print("  query     Query database for image URLs containing specific bib numbers")
         print("  train     Train/validate OCR parameters using images with known bib numbers")
+        print("  yolo      Run YOLO-based detector with optional OCR (advanced pipeline)")
         print("\nUse 'racebib <command> --help' for command-specific help")
         sys.exit(1)
 
@@ -40,9 +41,13 @@ def main():
         from bib_train import main as train_main
 
         train_main()
+    elif command == "yolo":
+        from bib_yolo import main as yolo_main
+
+        yolo_main()
     else:
         print(f"Unknown command: {command}")
-        print("Available commands: download, ocr, query, train")
+        print("Available commands: download, ocr, query, train, yolo")
         sys.exit(1)
 
 

@@ -8,6 +8,7 @@ A Docker-first application for downloading race photos and extracting bib number
 - **Bib Detection**: OCR pipeline using Tesseract + OpenCV with multiple rotation and PSM mode support
 - **Bib Storage**: Stores detected bib numbers linked to image URLs with confidence scores
 - **Query System**: Find image URLs containing specific bib numbers
+- **Deep Learning Pipeline (optional)**: YOLO + PaddleOCR detector/recognizer for more robust bib extraction
 - **HTML Reports**: Generate interactive HTML reports with thumbnails and statistics
 - **Performance Benchmarking**: Measure throughput and memory usage
 
@@ -327,6 +328,47 @@ racebib query --bib 1234 --db bibdb.json
 python scripts/generate_report.py --db bibdb.json --output report.html --annotated-dir ./annotated
 ```
 
+---
+
+### YOLO + PaddleOCR Pipeline (Advanced / Experimental)
+
+If the classic OCR approach (Tesseract + preprocessing) struggles, you can switch to a deep-learning pipeline that uses a YOLO detector for bib regions and PaddleOCR for text recognition.
+
+**Requirements:**
+- A YOLO model trained to detect bib numbers (`.pt` file). You can train with [Ultralytics YOLOv8](https://docs.ultralytics.com) on your labeled bib dataset.
+- PaddleOCR for recognition (already included in Docker image after rebuild).
+
+**Basic command (Docker):**
+```bash
+docker run --rm -v ${PWD}/data:/data \
+  bibanalyser:latest \
+  yolo --input /data/photos --output /data/yolo_results.csv \
+  --weights /data/models/bib_yolo.pt \
+  --db /data/bibdb.json \
+  --image-url https://example.com/gallery/ \
+  --annotate-dir /data/yolo_annotated
+```
+
+**Local Python:**
+```bash
+racebib yolo --input ./photos --output results/yolo_results.csv \
+  --weights ./models/bib_yolo.pt \
+  --db bibdb.json \
+  --image-url https://example.com/gallery/ \
+  --annotate-dir ./yolo_annotated
+```
+
+**Useful options:**
+- `--conf` / `--iou`: adjust YOLO thresholds (defaults: 0.3 / 0.45)
+- `--disable-ocr`: skip OCR to only get detection boxes
+- `--ocr-lang`: choose PaddleOCR language model (default `en`)
+- `--save-crops`: folder to store cropped bib regions
+- `--use-gpu`: enable GPU for PaddleOCR (requires CUDA environment)
+
+> ⚠️ The YOLO pipeline depends heavily on the quality of the detector. You must train or obtain a model that recognizes bib regions. The CLI assumes the bib class is ID `0`; override with `--class-id` if needed.
+
+---
+
 #### Quick Reference
 
 **Using Docker (Windows-friendly, no Tesseract install needed):**
@@ -345,6 +387,9 @@ docker run --rm -v ${PWD}/data:/data bibanalyser:latest train --input /data/phot
 
 # Query bibs
 docker run --rm -v ${PWD}/data:/data bibanalyser:latest query --bib 1234 --db /data/bibdb.json
+
+# YOLO + PaddleOCR (requires trained YOLO weights)
+docker run --rm -v ${PWD}/data:/data bibanalyser:latest yolo --input /data/photos --output /data/yolo_results.csv --weights /data/models/bib_yolo.pt
 ```
 
 **Using Local Python (requires Tesseract OCR installed):**
@@ -365,6 +410,9 @@ racebib query --bib 1234 --db bibdb.json
 # Train OCR parameters (optional, but recommended)
 racebib train --input ./photos --ground-truth ground_truth.json --output best_params.json
 
+# YOLO + PaddleOCR (requires trained YOLO weights)
+racebib yolo --input ./photos --output results/yolo_results.csv --weights ./models/bib_yolo.pt
+
 # Generate report
 python scripts/generate_report.py --db bibdb.json --output report.html
 ```
@@ -380,6 +428,7 @@ python scripts/generate_report.py --db bibdb.json --output report.html
 - `scripts/` - Main application scripts
   - `gallery_downloader.py` - Download images from gallery pages
   - `bib_finder.py` - OCR pipeline for bib detection
+  - `bib_yolo.py` - YOLO + PaddleOCR pipeline for advanced detection
   - `bib_storage.py` - Storage module for bib-to-URL mappings
   - `bib_query.py` - Query command for finding bibs
   - `generate_report.py` - HTML report generator

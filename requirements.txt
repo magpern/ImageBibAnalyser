@@ -6,3 +6,7 @@ tqdm
 requests
 beautifulsoup4
 psutil
+torch>=2.2.0
+ultralytics>=8.1.0
+paddleocr>=2.7.0
+paddlepaddle>=2.6.0
