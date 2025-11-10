@@ -8,6 +8,7 @@ A Docker-first application for downloading race photos and extracting bib number
 - **Bib Detection**: OCR pipeline using Tesseract + OpenCV with multiple rotation and PSM mode support
 - **Bib Storage**: Stores detected bib numbers linked to image URLs with confidence scores
 - **Query System**: Find image URLs containing specific bib numbers
+- **Deep Learning Pipeline (optional)**: YOLO + PaddleOCR detector/recognizer for more robust bib extraction
 - **HTML Reports**: Generate interactive HTML reports with thumbnails and statistics
 - **Performance Benchmarking**: Measure throughput and memory usage
 
@@ -17,14 +18,26 @@ A Docker-first application for downloading race photos and extracting bib number
 
 ### Build the Docker Image
 
+**For inference (OCR, download, query):**
 ```bash
 docker build -t bibanalyser:latest .
+```
+
+**For training YOLO models (requires GPU):**
+```bash
+docker build -f Dockerfile.train -t bibanalyser-train:latest .
 ```
 
 Or pull from GitHub Container Registry (after pushing):
 
 ```bash
+# Inference image (for OCR, download, query)
 docker pull ghcr.io/magpern/ImageBibAnalyser:latest
+
+# Training image (for YOLO model training, requires GPU)
+# Note: Training image must be built manually via GitHub Actions workflow
+# or built locally: docker build -f Dockerfile.train -t bibanalyser-train:latest .
+docker pull ghcr.io/magpern/ImageBibAnalyser-train:latest
 ```
 
 ### Download Images
@@ -327,6 +340,173 @@ racebib query --bib 1234 --db bibdb.json
 python scripts/generate_report.py --db bibdb.json --output report.html --annotated-dir ./annotated
 ```
 
+---
+
+### YOLO + PaddleOCR Pipeline (Advanced / Recommended for Better Accuracy)
+
+If the classic OCR approach (Tesseract + preprocessing) struggles, you can switch to a deep-learning pipeline that uses a YOLO detector for bib regions and PaddleOCR for text recognition. This typically provides **much better accuracy** than traditional OCR.
+
+**Requirements:**
+- A YOLO model trained to detect bib numbers (`.pt` file). See [Training Guide](docs/yolo_training.md) for how to train your own model.
+- PaddleOCR for recognition (already included in Docker image after rebuild).
+
+**Quick Training Guide:**
+
+1. **Label your images** - Use one of these tools to draw bounding boxes around bib numbers:
+   
+   **Online Tools (Easiest):**
+   - **[Roboflow](https://roboflow.com/)** ⭐ Recommended - Free tier, auto-format conversion, team collaboration
+   - **[CVAT](https://cvat.org/)** - Web-based, open-source, good for teams
+   - **[Label Studio](https://labelstud.io/)** - Open-source, web-based, supports many formats
+   
+   **Desktop Tools:**
+   - **[LabelImg](https://github.com/HumanSignal/labelImg)** - Free, simple, works offline
+   - **[LabelMe](https://github.com/wkentaro/labelme)** - MIT, supports polygons and other shapes
+   
+   **Quick Start with Roboflow (Recommended):**
+   1. Upload your race photos to [Roboflow](https://roboflow.com/)
+   2. Draw bounding boxes around each bib number
+   3. Export in YOLO format
+   4. Download the dataset (already organized into train/val/test)
+2. **Prepare dataset structure:**
+   
+   **What is `/data/yolo_dataset`?**
+   
+   It's a YOLO-formatted dataset containing:
+   - **Images**: Race photos with bib numbers visible
+   - **Labels**: Text files (`.txt`) with bounding box coordinates for each bib in the image
+   - **Structure**: Organized into `train/`, `val/`, and optionally `test/` splits
+   
+   ```bash
+   # Using Docker - creates directory structure (you still need to label images)
+   docker run --rm -v ${PWD}/data:/data bibanalyser:latest \
+     python3 -m scripts.prepare_yolo_dataset --input /data/photos --output /data/yolo_dataset
+   
+   # Or locally
+   python scripts/prepare_yolo_dataset.py --input ./photos --output ./yolo_dataset
+   ```
+   
+   **Dataset structure required:**
+   ```
+   yolo_dataset/
+   ├── train/
+   │   ├── images/     # Training images (e.g., photo1.jpg, photo2.jpg)
+   │   └── labels/     # YOLO label files (e.g., photo1.txt, photo2.txt)
+   ├── val/
+   │   ├── images/     # Validation images
+   │   └── labels/     # Validation labels
+   └── test/           # Optional test set
+   ```
+   
+   Each `.txt` label file contains bounding boxes in YOLO format (one line per bib):
+   ```
+   0 0.5 0.5 0.2 0.3   # class_id center_x center_y width height (normalized 0-1)
+   ```
+   Where `0` = bib class, and coordinates are relative to image size (0.0 to 1.0).
+   
+   See [docs/yolo_training.md](docs/yolo_training.md) for detailed dataset preparation guide.
+3. **Train the model:**
+   
+   **Using Docker (with GPU support):**
+
+
+
+
+
+
+
+   **Build and train locally:**
+   ```bash
+   # Build the training image
+   docker build -f Dockerfile.train -t bibanalyser-train:latest .
+   
+   # Train with GPU
+   # Note: /data/yolo_dataset must contain train/images/, train/labels/, val/images/, val/labels/
+   # See docs/yolo_training.md for dataset preparation
+   docker run --gpus all --rm -v ${PWD}/data:/data \
+     bibanalyser-train:latest \
+     python -m scripts.train_yolo \
+     --data /data/yolo_dataset --epochs 100 --name bib_detector --device 0
+   ```
+   
+   **Or pull from GitHub Container Registry:**
+   ```bash
+   # Pull the training image (after building via GitHub Actions)
+   docker pull ghcr.io/magpern/ImageBibAnalyser-train:latest
+   
+   # Train with GPU
+   docker run --gpus all --rm -v ${PWD}/data:/data \
+     ghcr.io/magpern/ImageBibAnalyser-train:latest \
+     python -m scripts.train_yolo \
+     --data /data/yolo_dataset --epochs 100 --name bib_detector --device 0
+   ```
+   
+   **Training examples:**
+   ```bash
+   # Quick training (50 epochs, nano model)
+   # Dataset structure: /data/yolo_dataset/train/{images,labels}/, /data/yolo_dataset/val/{images,labels}/
+   docker run --gpus all --rm -v ${PWD}/data:/data \
+     bibanalyser-train:latest \
+     python -m scripts.train_yolo \
+     --data /data/yolo_dataset --epochs 50 --model yolo11n.pt --batch 16 --name quick_train --device 0
+   
+   # High-accuracy training (200 epochs, medium model, larger images)
+   docker run --gpus all --rm -v ${PWD}/data:/data \
+     bibanalyser-train:latest \
+     python -m scripts.train_yolo \
+     --data /data/yolo_dataset --epochs 200 --model yolo11m.pt --imgsz 1280 --batch 8 --name high_acc --device 0
+   
+   # CPU-only training (no GPU needed, slower)
+   docker run --rm -v ${PWD}/data:/data \
+     bibanalyser-train:latest \
+     python -m scripts.train_yolo \
+     --data /data/yolo_dataset --epochs 50 --model yolo11n.pt --batch 4 --name cpu_train --device cpu
+   ```
+   
+   **Using local Python:**
+   ```bash
+   python scripts/train_yolo.py --data ./yolo_dataset --epochs 100 --name bib_detector
+   ```
+   
+   By default uses YOLO11 (better accuracy and speed). Use `--model yolov8n.pt` for YOLOv8 if needed.
+4. **Use the trained model:**
+   ```bash
+   racebib yolo --input ./photos --output ./results.csv --weights ./runs/detect/bib_detector/weights/best.pt
+   ```
+
+See [docs/yolo_training.md](docs/yolo_training.md) for detailed training instructions.
+
+**Basic command (Docker):**
+```bash
+docker run --rm -v ${PWD}/data:/data \
+  bibanalyser:latest \
+  yolo --input /data/photos --output /data/yolo_results.csv \
+  --weights /data/models/bib_yolo.pt \
+  --db /data/bibdb.json \
+  --image-url https://example.com/gallery/ \
+  --annotate-dir /data/yolo_annotated
+```
+
+**Local Python:**
+```bash
+racebib yolo --input ./photos --output results/yolo_results.csv \
+  --weights ./models/bib_yolo.pt \
+  --db bibdb.json \
+  --image-url https://example.com/gallery/ \
+  --annotate-dir ./yolo_annotated
+```
+
+**Useful options:**
+- `--conf` / `--iou`: adjust YOLO thresholds (defaults: 0.3 / 0.45)
+- `--disable-ocr`: skip OCR to only get detection boxes
+- `--ocr-lang`: choose PaddleOCR language model (default `en`)
+- `--save-crops`: folder to store cropped bib regions
+- `--use-gpu`: enable GPU for PaddleOCR (requires CUDA environment)
+
+> ⚠️ The YOLO pipeline depends heavily on the quality of the detector. You must train or obtain a model that recognizes bib regions. The CLI assumes the bib class is ID `0`; override with `--class-id` if needed.
+
+---
+
 #### Quick Reference
 
 **Using Docker (Windows-friendly, no Tesseract install needed):**
@@ -345,6 +525,9 @@ docker run --rm -v ${PWD}/data:/data bibanalyser:latest train --input /data/phot
 
 # Query bibs
 docker run --rm -v ${PWD}/data:/data bibanalyser:latest query --bib 1234 --db /data/bibdb.json
+
+# YOLO + PaddleOCR (requires trained YOLO weights)
+docker run --rm -v ${PWD}/data:/data bibanalyser:latest yolo --input /data/photos --output /data/yolo_results.csv --weights /data/models/bib_yolo.pt
 ```
 
 **Using Local Python (requires Tesseract OCR installed):**
@@ -365,6 +548,9 @@ racebib query --bib 1234 --db bibdb.json
 # Train OCR parameters (optional, but recommended)
 racebib train --input ./photos --ground-truth ground_truth.json --output best_params.json
 
+# YOLO + PaddleOCR (requires trained YOLO weights)
+racebib yolo --input ./photos --output results/yolo_results.csv --weights ./models/bib_yolo.pt
+
 # Generate report
 python scripts/generate_report.py --db bibdb.json --output report.html
 ```
@@ -380,22 +566,44 @@ python scripts/generate_report.py --db bibdb.json --output report.html
 - `scripts/` - Main application scripts
   - `gallery_downloader.py` - Download images from gallery pages
   - `bib_finder.py` - OCR pipeline for bib detection
+  - `bib_yolo.py` - YOLO-based bib detection with PaddleOCR
+  - `train_yolo.py` - YOLO model training script
+  - `prepare_yolo_dataset.py` - Dataset preparation helper
   - `bib_storage.py` - Storage module for bib-to-URL mappings
   - `bib_query.py` - Query command for finding bibs
+  - `bib_train.py` - OCR parameter training/validation
   - `generate_report.py` - HTML report generator
   - `benchmark.py` - Performance benchmarking tool
   - `cli.py` - Main CLI entry point
 - `tests/` - Unit tests
 - `docs/` - Documentation
-- `Dockerfile` - Docker container definition
+  - `yolo_training.md` - YOLO training guide
+- `Dockerfile` - Docker container definition (for inference)
+- `Dockerfile.train` - Docker container for YOLO training (with GPU support)
 - `.github/workflows/ci.yml` - CI/CD pipeline
 
 ## CI/CD
 
-The project includes GitHub Actions workflow that:
-- Runs linting and tests
-- Builds Docker image
-- Pushes to GitHub Container Registry (ghcr.io)
+The project includes GitHub Actions workflows:
+
+**Main CI/CD Pipeline** (`.github/workflows/ci.yml`):
+- Runs linting and tests on every push/PR
+- Builds and pushes inference Docker image on version tags (v*)
+- Pushes to GitHub Container Registry: `ghcr.io/magpern/ImageBibAnalyser`
+
+**Training Image Build** (`.github/workflows/build-train.yml`):
+- Manual workflow (trigger via GitHub Actions UI)
+- Builds and pushes training Docker image with GPU support
+- Pushes to GitHub Container Registry: `ghcr.io/magpern/ImageBibAnalyser-train`
+- To trigger: Go to Actions → "Build Training Image" → "Run workflow"
+
+**Local Training Image Build:**
+```bash
+# Build training image locally
+docker build -f Dockerfile.train -t bibanalyser-train:latest .
+
+# Then use it for training (see examples above)
+```
 
 ## License
 

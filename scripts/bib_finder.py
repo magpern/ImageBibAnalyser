@@ -411,6 +411,11 @@ def main():
         default=0.3,
         help="Maximum text size ratio (relative to image area) to consider as bib. Default 0.3 (30%%). Filters out oversized detections.",
     )
+    ap.add_argument(
+        "--use-gpu",
+        action="store_true",
+        help="Use GPU acceleration for image preprocessing (requires OpenCV with CUDA or CuPy). Note: Tesseract OCR is CPU-only, so GPU mainly speeds up preprocessing.",
+    )
 
     args = ap.parse_args()
 
