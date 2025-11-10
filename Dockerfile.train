@@ -62,13 +62,22 @@ CMD ["--help"]
 # Usage:
 # Build: docker build -f Dockerfile.train -t bibanalyser-train:latest .
 # 
-# Train (config persists in container):
-#   docker run --gpus all --rm -v ${PWD}/data:/data \
+# Train with fixed container name (container removed after exit):
+#   docker run --gpus all --rm --name bib-trainer \
+#     -v ${PWD}/data:/data \
 #     bibanalyser-train:latest train-yolo \
 #     --data /data/yolo_dataset --epochs 100 --name bib_detector --device 0
 #
+# Train with fixed container name (container persists, can be reused):
+#   docker run --gpus all --name bib-trainer \
+#     -v ${PWD}/data:/data \
+#     bibanalyser-train:latest train-yolo \
+#     --data /data/yolo_dataset --epochs 100 --name bib_detector --device 0
+#   # To reuse: docker start -ai bib-trainer
+#   # To remove: docker rm bib-trainer
+#
 # Train (config persists on host - recommended):
-#   docker run --gpus all --rm \
+#   docker run --gpus all --rm --name bib-trainer \
 #     -v ${PWD}/data:/data \
 #     -v ${PWD}/.ultralytics:/app/.ultralytics \
 #     bibanalyser-train:latest train-yolo \
