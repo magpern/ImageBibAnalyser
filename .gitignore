@@ -95,6 +95,7 @@ data/
 bibdb.json
 benchmark.json
 report.html
+.ultralytics/
 
 # Docker
 .dockerignore

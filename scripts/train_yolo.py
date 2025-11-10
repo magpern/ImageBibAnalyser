@@ -12,8 +12,39 @@ Requirements:
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+# Set Ultralytics config directory to persistent location if not already set
+# Default to /app/.ultralytics (persists in container) or /tmp/Ultralytics as fallback
+if "YOLO_CONFIG_DIR" not in os.environ:
+    # Try persistent location first, fallback to /tmp if not writable
+    persistent_dir = Path("/app/.ultralytics")
+    try:
+        persistent_dir.mkdir(parents=True, exist_ok=True)
+        test_file = persistent_dir / ".test_write"
+        test_file.touch()
+        test_file.unlink()
+        os.environ["YOLO_CONFIG_DIR"] = str(persistent_dir)
+    except (PermissionError, OSError):
+        # Fallback to /tmp if persistent location isn't writable
+        os.environ["YOLO_CONFIG_DIR"] = "/tmp/Ultralytics"
+
+# Ensure the config directory exists and is writable
+# Ultralytics creates a nested "Ultralytics" subdirectory inside YOLO_CONFIG_DIR
+config_dir = Path(os.environ.get("YOLO_CONFIG_DIR", "/app/.ultralytics"))
+ultralytics_subdir = config_dir / "Ultralytics"
+ultralytics_subdir.mkdir(parents=True, exist_ok=True)
+try:
+    # Test write permissions in the nested directory
+    test_file = ultralytics_subdir / ".test_write"
+    test_file.touch()
+    test_file.unlink()
+except (PermissionError, OSError):
+    # Final fallback to /tmp if the configured directory isn't writable
+    os.environ["YOLO_CONFIG_DIR"] = "/tmp/Ultralytics"
+    Path("/tmp/Ultralytics/Ultralytics").mkdir(parents=True, exist_ok=True)
 
 try:
     from ultralytics import YOLO

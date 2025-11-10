@@ -41,6 +41,15 @@ RUN chmod +x scripts/*.py
 # Set Python path to include scripts directory
 ENV PYTHONPATH=/app/scripts
 
+# Set Ultralytics config directory to persistent location
+# This stores settings, downloaded models cache, and training metadata
+# Can be mounted as a volume to persist between container runs
+ENV YOLO_CONFIG_DIR=/app/.ultralytics
+
+# Create Ultralytics config directory structure and make it writable
+# Ultralytics creates a nested "Ultralytics" subdirectory inside YOLO_CONFIG_DIR
+RUN mkdir -p /app/.ultralytics/Ultralytics && chmod -R 777 /app/.ultralytics
+
 # Create wrapper script for racebib command
 RUN echo '#!/bin/bash' > /usr/local/bin/racebib && \
     echo 'cd /app && python -m scripts.cli "$@"' >> /usr/local/bin/racebib && \
@@ -52,9 +61,18 @@ CMD ["--help"]
 
 # Usage:
 # Build: docker build -f Dockerfile.train -t bibanalyser-train:latest .
-# Train: docker run --gpus all --rm -v ${PWD}/data:/data \
-#   bibanalyser-train:latest python -m scripts.train_yolo \
-#   --data /data/yolo_dataset --epochs 100 --name bib_detector --device 0
+# 
+# Train (config persists in container):
+#   docker run --gpus all --rm -v ${PWD}/data:/data \
+#     bibanalyser-train:latest train-yolo \
+#     --data /data/yolo_dataset --epochs 100 --name bib_detector --device 0
+#
+# Train (config persists on host - recommended):
+#   docker run --gpus all --rm \
+#     -v ${PWD}/data:/data \
+#     -v ${PWD}/.ultralytics:/app/.ultralytics \
+#     bibanalyser-train:latest train-yolo \
+#     --data /data/yolo_dataset --epochs 100 --name bib_detector --device 0
 #
 # Note: Requires nvidia-docker or Docker with GPU support
 # For CPU-only training, use the regular Dockerfile instead
