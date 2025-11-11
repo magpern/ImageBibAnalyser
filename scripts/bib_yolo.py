@@ -96,10 +96,16 @@ def load_yolo_model(weights_path: Path, device: str) -> YOLO:
     except Exception as exc:  # pragma: no cover - runtime dependency
         raise RuntimeError(f"Failed to load YOLO model from {weights_path}: {exc}") from exc
 
-    # Validate device
+    # Validate device and print what's actually being used
     device = device.lower()
-    if device == "cuda" and not model.device.type.startswith("cuda"):
+    actual_device = str(model.device)
+    print(f"YOLO model loaded. Requested device: {device}, Actual device: {actual_device}", file=sys.stderr)
+    
+    if device in ("cuda", "0", "cuda:0") and not actual_device.startswith("cuda"):
         print("Warning: CUDA requested but not available; running on CPU instead.", file=sys.stderr)
+    elif device in ("cuda", "0", "cuda:0") and actual_device.startswith("cuda"):
+        print(f"✓ GPU acceleration enabled: {actual_device}", file=sys.stderr)
+    
     return model
 
 
@@ -533,8 +539,21 @@ def _extract_bib_numbers_from_ocr_texts(
                         texts.append((combined_rev, avg_conf))
                     break
     elif len(all_digit_sequences) == 1:
-        # Single sequence found
+        # Single sequence found - accept it even if short (for cases like "16")
         texts.append(all_digit_sequences[0])
+    
+    # Also check if any OCR text contains digits mixed with text (e.g., "16RUNNER" -> extract "16")
+    # This helps with cases where OCR reads the whole bib including text
+    for text, conf in all_ocr_texts:
+        # Look for digit sequences in text that might have been missed
+        # Extract all digit sequences from the text, even if they're part of larger text
+        digit_matches = re.findall(r'\d+', text)
+        for digits in digit_matches:
+            if min_digits <= len(digits) <= max_digits:
+                # Check if we already have this in all_digit_sequences
+                if not any(d == digits for d, _ in all_digit_sequences):
+                    # Add it with slightly lower confidence (it was mixed with text)
+                    texts.append((digits, conf * 0.9))
     
     return texts
 

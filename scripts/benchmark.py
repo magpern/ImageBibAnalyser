@@ -64,8 +64,8 @@ def run_benchmark(
     output_path: Path,
     limit: int = 500,
     workers: int = 4,
-    min_digits: int = 2,
-    max_digits: int = 6,
+    min_digits: int = 1,
+    max_digits: int = 4,
     min_conf: int = 60,
 ) -> Dict:
     """Run benchmark on image set.
