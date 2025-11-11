@@ -508,11 +508,23 @@ def _extract_bib_numbers_from_ocr_texts(
                     all_digit_sequences.append((matched_text, conf))
         else:
             # Find all digit sequences in the text
+            # First try with min_digits requirement
             digits = re.findall(rf"\d{{{min_digits},{max_digits}}}", text)
             for d in digits:
                 # Filter out years (2020-2030 range, or 4-digit years in general)
                 if not year_pattern.match(d):
                     all_digit_sequences.append((d, conf))
+            
+            # If min_digits > 1 and we found no results, also try single digits
+            # This helps with bibs like "1", "2", "3" but only if no multi-digit numbers found
+            if min_digits > 1 and not digits:
+                single_digits = re.findall(r'\b\d\b', text)  # Single digits as whole words
+                for d in single_digits:
+                    # Filter out years and only accept if it's a standalone digit (not part of larger number)
+                    if not year_pattern.match(d):
+                        # Only add single digits if confidence is high (to avoid false positives)
+                        if conf > 0.8:  # Higher threshold for single digits
+                            all_digit_sequences.append((d, conf))
     
     # Process digit sequences: prefer longest, try to combine if needed
     if len(all_digit_sequences) > 1:
